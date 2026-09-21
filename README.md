@@ -24,10 +24,6 @@ The package builds on
 You keep your own navigation, backend, analytics, and product rules. This
 package connects the notification pieces around them.
 
-[Get started](#get-started) · [Feature examples](#local-notifications) ·
-[Backend payloads](#payloads-and-server-sending) ·
-[Platform support](#platform-support) · [Documentation](doc/index.md)
-
 ## What it takes off your hands
 
 | In your app | In this package |
@@ -48,6 +44,41 @@ display.
 
 Start with message handling and notification opens. Add the other pieces when
 your app needs them.
+
+<details>
+<summary><strong>Full contents</strong></summary>
+
+- [Get started](#get-started)
+  - [Install](#install)
+  - [Configure the platforms you ship](#configure-the-platforms-you-ship)
+  - [Initialize once and listen for opens](#initialize-once-and-listen-for-opens)
+- [Choose who displays remote notifications](#choose-who-displays-remote-notifications)
+- [Handle notification opens](#handle-notification-opens)
+- [Tokens and topics](#tokens-and-topics)
+- [Local notifications](#local-notifications)
+- [Actions and inline reply](#actions-and-inline-reply)
+- [Scheduling](#scheduling)
+- [Groups, threads, badges, and sounds](#groups-threads-badges-and-sounds)
+- [Foreground presentation](#foreground-presentation)
+- [In-app messages](#in-app-messages)
+- [Preferences and delivery policy](#preferences-and-delivery-policy)
+- [Inbox](#inbox)
+- [Delivery events and analytics](#delivery-events-and-analytics)
+- [Payloads and server sending](#payloads-and-server-sending)
+  - [The string-only FCM rule](#the-string-only-fcm-rule)
+  - [System-presented HTTP v1 example](#system-presented-http-v1-example)
+  - [Client-presented data-only example](#client-presented-data-only-example)
+  - [In-app message example](#in-app-message-example)
+  - [Reference server](#reference-server)
+- [Diagnostics and capabilities](#diagnostics-and-capabilities)
+- [Testing](#testing)
+- [Platform support](#platform-support)
+- [Troubleshooting](#troubleshooting)
+- [Further documentation](#further-documentation)
+- [Contributing](#contributing)
+- [License](#license)
+
+</details>
 
 ## Get started
 
