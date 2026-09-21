@@ -2,9 +2,9 @@
 # ---------------------------------------------------------------------------
 # terminated_state_manual.sh
 #
-# Manual test helper for the "terminated state / cold start" FCM scenario.
-# This cannot be automated inside a test runner because the device must be
-# killed and re-launched externally.
+# Manual fallback for the "terminated state / cold start" FCM scenario.
+# Prefer android_lifecycle_e2e.sh when ADB notification-shade automation is
+# available; this helper supports devices that still need a human tap.
 #
 # Usage:
 #   bash test/firebase_config/terminated_state_manual.sh \
@@ -12,10 +12,14 @@
 #     --project <firebase-project-id> \
 #     --key-file test/firebase_config/service_account.json
 #
+# Before running, move the app to the background and kill its process without
+# force-stopping the package. Android blocks FCM delivery to a force-stopped app
+# until the user launches it again.
+#
 # Steps performed:
 #   1. Obtains an OAuth2 bearer token from the service account.
-#   2. POSTs an FCM notification to the given device token.
-#   3. Prints instructions for the developer to follow.
+#   2. POSTs an FCM notification to the already-terminated app.
+#   3. Prints the remaining tap-verification instructions.
 # ---------------------------------------------------------------------------
 
 set -euo pipefail
@@ -45,7 +49,7 @@ if [[ ! -f "$KEY_FILE" ]]; then
 fi
 
 # ── Dependency check ────────────────────────────────────────────────────────
-for cmd in python3 curl jq; do
+for cmd in python3 curl jq openssl; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "Required tool not found: $cmd" >&2
     exit 1
@@ -55,50 +59,48 @@ done
 # ── Step 1: Obtain OAuth2 bearer token ─────────────────────────────────────
 echo "[1/3] Obtaining OAuth2 bearer token from service account…"
 
-BEARER=$(python3 - <<PYEOF
-import json, time, base64, hashlib, hmac, urllib.request, urllib.parse
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/fmh-manual.XXXXXX")
+trap 'rm -rf -- "$TEMP_DIR"' EXIT
+JWT_PARTS=$(python3 - "$KEY_FILE" <<'PYEOF'
+import base64, json, sys, time
 
-with open("$KEY_FILE") as f:
-    sa = json.load(f)
-
-header = base64.urlsafe_b64encode(json.dumps({"alg":"RS256","typ":"JWT"}).encode()).rstrip(b"=").decode()
+with open(sys.argv[1], encoding="utf-8") as source:
+    account = json.load(source)
+encode = lambda value: base64.urlsafe_b64encode(value).rstrip(b"=").decode()
 now = int(time.time())
-claims = {
-    "iss": sa["client_email"],
+print(encode(json.dumps({"alg":"RS256","typ":"JWT"}, separators=(",", ":")).encode()))
+print(encode(json.dumps({
+    "iss": account["client_email"],
     "scope": "https://www.googleapis.com/auth/firebase.messaging",
     "aud": "https://oauth2.googleapis.com/token",
     "exp": now + 3600,
     "iat": now,
-}
-payload = base64.urlsafe_b64encode(json.dumps(claims).encode()).rstrip(b"=").decode()
-
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.backends import default_backend
-
-private_key = serialization.load_pem_private_key(
-    sa["private_key"].encode(), password=None, backend=default_backend()
-)
-signing_input = f"{header}.{payload}".encode()
-signature = private_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
-sig_b64 = base64.urlsafe_b64encode(signature).rstrip(b"=").decode()
-
-jwt = f"{header}.{payload}.{sig_b64}"
-
-data = urllib.parse.urlencode({
-    "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-    "assertion": jwt,
-}).encode()
-
-req = urllib.request.Request(
-    "https://oauth2.googleapis.com/token",
-    data=data,
-    headers={"Content-Type": "application/x-www-form-urlencoded"},
-)
-resp = json.loads(urllib.request.urlopen(req).read())
-print(resp["access_token"])
+}, separators=(",", ":")).encode()))
 PYEOF
 )
+JWT_HEADER=$(printf '%s\n' "$JWT_PARTS" | sed -n '1p')
+JWT_PAYLOAD=$(printf '%s\n' "$JWT_PARTS" | sed -n '2p')
+PRIVATE_KEY="$TEMP_DIR/private-key.pem"
+jq -r '.private_key' "$KEY_FILE" >"$PRIVATE_KEY"
+chmod 600 "$PRIVATE_KEY"
+JWT_SIGNATURE=$(printf '%s' "$JWT_HEADER.$JWT_PAYLOAD" \
+  | openssl dgst -sha256 -sign "$PRIVATE_KEY" -binary \
+  | openssl base64 -A \
+  | tr '+/' '-_' \
+  | tr -d '=')
+JWT_ASSERTION="$JWT_HEADER.$JWT_PAYLOAD.$JWT_SIGNATURE"
+TOKEN_RESPONSE=$(curl -sS \
+  -X POST \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer' \
+  --data-urlencode "assertion=$JWT_ASSERTION" \
+  'https://oauth2.googleapis.com/token')
+BEARER=$(printf '%s' "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
+
+if [[ -z "$BEARER" ]]; then
+  echo "OAuth token exchange failed: $(printf '%s' "$TOKEN_RESPONSE" | jq -c .)" >&2
+  exit 1
+fi
 
 echo "   ✓ Bearer token obtained."
 
@@ -143,18 +145,18 @@ cat <<INSTRUCTIONS
 ─────────────────────────────────────────────────────────────────────────────
 A notification titled "Terminated State Test" has been sent to your device.
 
-To verify the cold-start (terminated state) behaviour:
+This helper assumes the app process was killed before the command was run and
+the package was not force-stopped. To finish verifying cold-start behaviour:
 
-  1. Force-quit the app on the device NOW (swipe up or use App Switcher).
-  2. Wait for the notification to appear on the device lock screen or
+  1. Wait for the notification to appear on the device lock screen or
      notification shade (usually within a few seconds).
-  3. Tap the notification to launch the app.
-  4. Inspect the app's initial notification handling:
+  2. Tap the notification to launch the app.
+  3. Inspect the app's initial notification handling:
        FirebaseMessagingHandler.checkInitial()
      should return a non-null NotificationData with:
        - title: "Terminated State Test"
        - payload.fcmh_test_ts: "$TS"
-  5. Alternatively, check your unified handler or analytics callback for
+  4. Alternatively, check your unified handler or analytics callback for
      the lifecycle value NotificationLifecycle.terminated.
 
 Expected: The app opens directly to whatever screen your notification router

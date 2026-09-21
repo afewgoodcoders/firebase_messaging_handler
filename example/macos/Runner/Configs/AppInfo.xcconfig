@@ -8,7 +8,7 @@
 PRODUCT_NAME = fmhexample
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = qoder.flutter.fmhexample.fmhexample
+PRODUCT_BUNDLE_IDENTIFIER = com.afewgoodcoders.fmhexample
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2025 qoder.flutter.fmhexample. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 A Few Good Coders. All rights reserved.

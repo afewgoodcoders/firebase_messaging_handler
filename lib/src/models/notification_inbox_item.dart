@@ -63,12 +63,14 @@ class NotificationInboxItem {
       'category': category,
       'data': data,
       'actions': actions
-          .map((NotificationAction action) => <String, dynamic>{
-                'id': action.id,
-                'title': action.title,
-                'destructive': action.destructive,
-                'payload': action.payload,
-              })
+          .map(
+            (NotificationAction action) => <String, dynamic>{
+              'id': action.id,
+              'title': action.title,
+              'destructive': action.destructive,
+              'payload': action.payload,
+            },
+          )
           .toList(),
     };
   }
@@ -86,10 +88,12 @@ class NotificationInboxItem {
       data: map['data'] != null
           ? Map<String, dynamic>.from(map['data'] as Map)
           : const <String, dynamic>{},
-      actions: (map['actions'] as List<dynamic>? ?? <dynamic>[])
-          .map((dynamic action) {
-        final Map<String, dynamic> parsed =
-            Map<String, dynamic>.from(action as Map);
+      actions: (map['actions'] as List<dynamic>? ?? <dynamic>[]).map((
+        dynamic action,
+      ) {
+        final Map<String, dynamic> parsed = Map<String, dynamic>.from(
+          action as Map,
+        );
         return NotificationAction(
           id: parsed['id'] as String,
           title: parsed['title'] as String,

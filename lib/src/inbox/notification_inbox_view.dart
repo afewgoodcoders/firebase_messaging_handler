@@ -4,18 +4,12 @@ import '../core/interfaces/notification_inbox_storage_interface.dart';
 import '../models/notification_inbox_item.dart';
 import 'notification_inbox_theme.dart';
 
-typedef NotificationInboxItemTap = void Function(
-  NotificationInboxItem item,
-);
+typedef NotificationInboxItemTap = void Function(NotificationInboxItem item);
 
-typedef NotificationInboxActionTap = void Function(
-  String actionId,
-  NotificationInboxItem item,
-);
+typedef NotificationInboxActionTap =
+    void Function(String actionId, NotificationInboxItem item);
 
-typedef NotificationInboxDelete = Future<void> Function(
-  List<String> ids,
-);
+typedef NotificationInboxDelete = Future<void> Function(List<String> ids);
 
 class NotificationInboxView extends StatefulWidget {
   const NotificationInboxView({
@@ -127,8 +121,9 @@ class _NotificationInboxViewState extends State<NotificationInboxView> {
     }
     await widget.storage.markRead(<String>[item.id]);
     setState(() {
-      final int index =
-          _items.indexWhere((NotificationInboxItem it) => it.id == item.id);
+      final int index = _items.indexWhere(
+        (NotificationInboxItem it) => it.id == item.id,
+      );
       if (index != -1) {
         _items[index] = item.copyWith(isRead: true);
       }
@@ -145,32 +140,29 @@ class _NotificationInboxViewState extends State<NotificationInboxView> {
     final Widget child = _isLoading
         ? const Center(child: CircularProgressIndicator())
         : _items.isEmpty
-            ? theme?.emptyState ??
-                const Center(child: Text('No notifications yet.'))
-            : ListView.separated(
-                itemCount: _items.length + (_hasMore ? 1 : 0),
-                separatorBuilder: (_, __) => widget.showDivider
-                    ? Divider(height: 1, color: divider)
-                    : const SizedBox.shrink(),
-                itemBuilder: (BuildContext context, int index) {
-                  if (index >= _items.length) {
-                    _loadMore();
-                    return const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  final NotificationInboxItem item = _items[index];
-                  return _buildTile(context, item, theme);
-                },
-              );
+        ? theme?.emptyState ??
+              const Center(child: Text('No notifications yet.'))
+        : ListView.separated(
+            itemCount: _items.length + (_hasMore ? 1 : 0),
+            separatorBuilder: (_, _) => widget.showDivider
+                ? Divider(height: 1, color: divider)
+                : const SizedBox.shrink(),
+            itemBuilder: (BuildContext context, int index) {
+              if (index >= _items.length) {
+                _loadMore();
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final NotificationInboxItem item = _items[index];
+              return _buildTile(context, item, theme);
+            },
+          );
 
     return Container(
       color: bg,
-      child: RefreshIndicator(
-        onRefresh: _onRefresh,
-        child: child,
-      ),
+      child: RefreshIndicator(onRefresh: _onRefresh, child: child),
     );
   }
 
@@ -179,13 +171,16 @@ class _NotificationInboxViewState extends State<NotificationInboxView> {
     NotificationInboxItem item,
     NotificationInboxTheme? theme,
   ) {
-    final TextStyle? titleStyle =
-        item.isRead ? theme?.readTitleStyle : theme?.unreadTitleStyle;
-    final Color? tileColor =
-        item.isRead ? theme?.readBackgroundColor : theme?.unreadBackgroundColor;
+    final TextStyle? titleStyle = item.isRead
+        ? theme?.readTitleStyle
+        : theme?.unreadTitleStyle;
+    final Color? tileColor = item.isRead
+        ? theme?.readBackgroundColor
+        : theme?.unreadBackgroundColor;
     final Widget? leading = theme?.leadingBuilder?.call(context, item.isRead);
     final Widget? trailing = theme?.trailingBuilder?.call(context);
-    final String timestampLabel = theme?.dateFormat?.call(item.timestamp) ??
+    final String timestampLabel =
+        theme?.dateFormat?.call(item.timestamp) ??
         item.timestamp.toIso8601String();
 
     final List<Widget> actionChips = item.actions
@@ -225,10 +220,11 @@ class _NotificationInboxViewState extends State<NotificationInboxView> {
       Padding(
         padding: const EdgeInsets.only(top: 6),
         child: DefaultTextStyle(
-          style: (theme?.timestampStyle ??
-                  Theme.of(context).textTheme.labelSmall ??
-                  const TextStyle())
-              .copyWith(color: theme?.timestampStyle?.color ?? Colors.grey),
+          style:
+              (theme?.timestampStyle ??
+                      Theme.of(context).textTheme.labelSmall ??
+                      const TextStyle())
+                  .copyWith(color: theme?.timestampStyle?.color ?? Colors.grey),
           child: Text(timestampLabel),
         ),
       ),

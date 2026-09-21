@@ -3,10 +3,7 @@ import '../../models/notification_inbox_item.dart';
 /// Persistence abstraction used by `NotificationInboxView` and inbox services.
 abstract class NotificationInboxStorageInterface {
   /// Returns a page of inbox items ordered newest-first.
-  Future<List<NotificationInboxItem>> fetch({
-    int page = 0,
-    int pageSize = 20,
-  });
+  Future<List<NotificationInboxItem>> fetch({int page = 0, int pageSize = 20});
 
   /// Inserts or updates a single inbox item.
   Future<void> upsert(NotificationInboxItem item);

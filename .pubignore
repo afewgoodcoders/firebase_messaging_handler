@@ -1,0 +1,26 @@
+.dart_tool/
+build/
+**/build/
+**/.DS_Store
+**/doc/api/
+.idea/
+.vscode/
+.internal/
+AGENTS.md
+documentation/
+reference/
+pubspec.lock
+example/firebase.json
+example/android/app/google-services.json
+example/lib/firebase_options.dart
+example/ios/Runner/GoogleService-Info.plist
+example/macos/Runner/GoogleService-Info.plist
+example/web/firebase-messaging-sw.js
+test/firebase_config/service_account.json
+
+# Superseded paths retained only in Git history during the v2 rename.
+android/src/main/kotlin/in/qoder/firebase_messaging_handler/FirebaseMessagingHandlerPlugin.kt
+example/android/app/src/main/kotlin/qoder/flutter/fmhexample/fmhexample/MainActivity.kt
+integration_test/handlers_integration_test.dart
+integration_test/real_push/real_push_test.dart
+test/helpers/fcm_test_sender.dart

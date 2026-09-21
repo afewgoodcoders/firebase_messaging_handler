@@ -1,10 +1,10 @@
 name: fcm_tester
 description: A CLI tool to test Firebase Messaging scenarios.
-version: 1.0.0
+version: 2.0.0
 publish_to: 'none'
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.10.0 <4.0.0'
 
 dependencies:
   args: ^2.4.2

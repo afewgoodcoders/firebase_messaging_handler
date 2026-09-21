@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://afewgoodcoders.com/schemas/firebase-messaging-handler/notification-envelope-v2.schema.json",
+  "title": "Firebase Messaging Handler Notification Envelope v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "command"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "id": { "type": "string", "minLength": 1 },
+    "idempotencyKey": { "type": "string", "minLength": 1 },
+    "command": {
+      "enum": ["display", "cancel", "replace", "markRead", "silent"]
+    },
+    "title": { "type": "string" },
+    "body": { "type": "string" },
+    "titleLocKey": { "type": "string" },
+    "titleLocArgs": { "type": "array", "items": { "type": "string" } },
+    "bodyLocKey": { "type": "string" },
+    "bodyLocArgs": { "type": "array", "items": { "type": "string" } },
+    "category": { "type": "string" },
+    "route": { "type": "string" },
+    "image": { "type": "string", "format": "uri" },
+    "sound": { "type": "string" },
+    "channelId": { "type": "string" },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "destructive": { "type": "boolean" },
+          "foreground": { "type": "boolean" },
+          "requiresAuthentication": { "type": "boolean" },
+          "cancelNotification": { "type": "boolean" },
+          "textInput": { "type": "boolean" },
+          "inputLabel": { "type": "string" },
+          "inputButtonTitle": { "type": "string" },
+          "inputChoices": { "type": "array", "items": { "type": "string" } },
+          "allowFreeFormInput": { "type": "boolean" },
+          "payload": { "type": "object" }
+        }
+      }
+    },
+    "ttlSeconds": { "type": "integer", "minimum": 0, "maximum": 2419200 },
+    "priority": { "enum": ["normal", "high"] },
+    "remotePresentation": { "enum": ["client", "system"] },
+    "collapseKey": { "type": "string" },
+    "dedupeKey": { "type": "string" },
+    "sentAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "storeInInbox": { "type": "boolean" },
+    "updateBadge": { "type": "boolean" },
+    "presentInApp": { "type": "boolean" },
+    "analytics": { "type": "object" },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "android": { "type": "object" },
+        "apple": { "type": "object" },
+        "web": { "type": "object" }
+      }
+    },
+    "data": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "command": { "enum": ["display", "replace"] } },
+        "required": ["command"]
+      },
+      "then": {
+        "anyOf": [
+          { "required": ["title"] },
+          { "required": ["body"] },
+          { "required": ["titleLocKey"] },
+          { "required": ["bodyLocKey"] }
+        ]
+      }
+    }
+  ]
+}

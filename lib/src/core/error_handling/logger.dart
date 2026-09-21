@@ -3,13 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'fcm_error.dart';
 
 /// Log levels for the FCM logger
-enum LogLevel {
-  debug,
-  info,
-  warning,
-  error,
-  critical,
-}
+enum LogLevel { debug, info, warning, error, critical }
 
 /// Logger class for FCM operations
 class FCMLogger {
@@ -64,8 +58,12 @@ class FCMLogger {
   }
 
   /// Logs a critical message
-  void critical(String message,
-      {String? tag, dynamic data, FCMError? fcmError}) {
+  void critical(
+    String message, {
+    String? tag,
+    dynamic data,
+    FCMError? fcmError,
+  }) {
     _log(LogLevel.critical, message, tag: tag, data: data, fcmError: fcmError);
   }
 
@@ -99,8 +97,13 @@ class FCMLogger {
     return _logEntries.map((entry) => entry.toMap()).toList();
   }
 
-  void _log(LogLevel level, String message,
-      {String? tag, dynamic data, FCMError? fcmError}) {
+  void _log(
+    LogLevel level,
+    String message, {
+    String? tag,
+    dynamic data,
+    FCMError? fcmError,
+  }) {
     if (level.index < _minLevel.index) return;
 
     final entry = LogEntry(

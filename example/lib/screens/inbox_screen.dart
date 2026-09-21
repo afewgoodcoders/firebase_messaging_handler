@@ -45,16 +45,9 @@ class _InboxScreenState extends State<InboxScreen> {
             title: 'Open',
             payload: <String, dynamic>{'route': '/scenario'},
           ),
-          NotificationAction(
-            id: 'later',
-            title: 'Later',
-            destructive: false,
-          ),
+          NotificationAction(id: 'later', title: 'Later', destructive: false),
         ],
-        data: const <String, dynamic>{
-          'campaign': 'inbox_demo',
-          'cta': 'open',
-        },
+        data: const <String, dynamic>{'campaign': 'inbox_demo', 'cta': 'open'},
       ),
       NotificationInboxItem(
         id: 'promo-${now.millisecondsSinceEpoch + 1}',
@@ -109,9 +102,9 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   NotificationInboxTheme _theme(BuildContext context) {
@@ -142,18 +135,17 @@ class _InboxScreenState extends State<InboxScreen> {
       ),
       leadingBuilder: (BuildContext context, bool isRead) {
         return CircleAvatar(
-          backgroundColor:
-              isRead ? Colors.grey.shade300 : const Color(0xFF2563EB),
+          backgroundColor: isRead
+              ? Colors.grey.shade300
+              : const Color(0xFF2563EB),
           child: Icon(
             Icons.notifications,
             color: isRead ? Colors.grey.shade800 : Colors.white,
           ),
         );
       },
-      trailingBuilder: (BuildContext context) => const Icon(
-        Icons.chevron_right,
-        color: Colors.grey,
-      ),
+      trailingBuilder: (BuildContext context) =>
+          const Icon(Icons.chevron_right, color: Colors.grey),
       dateFormat: (DateTime ts) => _formatTimestamp(ts),
     );
   }
@@ -209,10 +201,9 @@ class _InboxScreenState extends State<InboxScreen> {
                 const SizedBox(height: 8),
                 Text(
                   subtitle,
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelMedium
-                      ?.copyWith(color: Colors.grey.shade700),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Colors.grey.shade700,
+                  ),
                 ),
               ],
             ),

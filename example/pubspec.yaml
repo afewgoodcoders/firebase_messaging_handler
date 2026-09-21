@@ -1,11 +1,11 @@
 name: firebase_messaging_handler_example
 description: A comprehensive showcase application demonstrating all features of the Firebase Messaging Handler plugin.
-version: 1.0.0+1
+version: 2.0.0+1
 publish_to: 'none'
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
-  flutter: ">=3.10.0"
+  sdk: ">=3.10.0 <4.0.0"
+  flutter: ">=3.38.1"
 
 dependencies:
   flutter:

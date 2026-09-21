@@ -41,8 +41,9 @@ class InAppQuietHours {
   /// Returns the next time presentation is allowed for the provided moment.
   DateTime nextAllowedTime(DateTime now) {
     final DateTime today = DateTime(now.year, now.month, now.day);
-    final DateTime endTime =
-        today.add(Duration(hours: endHour, minutes: endMinute));
+    final DateTime endTime = today.add(
+      Duration(hours: endHour, minutes: endMinute),
+    );
 
     if (!isQuiet(now)) {
       return now;
@@ -78,19 +79,19 @@ class InAppDeliveryDecision {
   final String? reason;
 
   /// Successful decision indicating immediate display is allowed.
-  static const InAppDeliveryDecision allow =
-      InAppDeliveryDecision._(allowed: true);
+  static const InAppDeliveryDecision allow = InAppDeliveryDecision._(
+    allowed: true,
+  );
 
   /// Creates a deferred decision with the next eligible time.
   factory InAppDeliveryDecision.defer({
     required DateTime nextEligibleAt,
     String? reason,
-  }) =>
-      InAppDeliveryDecision._(
-        allowed: false,
-        nextEligibleAt: nextEligibleAt,
-        reason: reason,
-      );
+  }) => InAppDeliveryDecision._(
+    allowed: false,
+    nextEligibleAt: nextEligibleAt,
+    reason: reason,
+  );
 }
 
 /// Global policy used to throttle or defer in-app notification presentation.
@@ -123,10 +124,8 @@ class InAppDeliveryPolicy {
 /// Mutable counters used to evaluate [InAppDeliveryPolicy] decisions.
 class InAppDeliveryStats {
   /// Creates a stats bucket, optionally seeded from persisted values.
-  InAppDeliveryStats({
-    this.lastShown,
-    Map<String, int>? perDayCounts,
-  }) : perDayCounts = perDayCounts ?? <String, int>{};
+  InAppDeliveryStats({this.lastShown, Map<String, int>? perDayCounts})
+    : perDayCounts = perDayCounts ?? <String, int>{};
 
   /// Last time any message covered by these stats was shown.
   DateTime? lastShown;

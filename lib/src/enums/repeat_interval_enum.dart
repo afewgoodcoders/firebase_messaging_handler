@@ -1,11 +1,4 @@
-enum RepeatIntervalEnum {
-  daily,
-  weekly,
-  monthly,
-  yearly,
-  hourly,
-  minutely,
-}
+enum RepeatIntervalEnum { daily, weekly, monthly, yearly, hourly, minutely }
 
 extension RepeatIntervalEnumExtension on RepeatIntervalEnum {
   String get name {

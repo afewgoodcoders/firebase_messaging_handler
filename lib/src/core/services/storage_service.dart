@@ -9,6 +9,9 @@ import '../../constants/export.dart';
 class StorageService implements StorageServiceInterface {
   static StorageService? _instance;
   SharedPreferences? _prefs;
+  bool _saveNotifications = true;
+  int _maxStoredNotifications = 100;
+  bool _debugLoggingEnabled = false;
 
   /// Singleton instance
   static StorageService get instance {
@@ -17,6 +20,17 @@ class StorageService implements StorageServiceInterface {
   }
 
   StorageService._internal();
+
+  /// Applies runtime storage limits from [FCMConfiguration].
+  void configure({
+    required bool saveNotifications,
+    required int maxStoredNotifications,
+    bool enableDebugLogging = false,
+  }) {
+    _saveNotifications = saveNotifications;
+    _maxStoredNotifications = maxStoredNotifications;
+    _debugLoggingEnabled = enableDebugLogging;
+  }
 
   /// Initializes the storage service
   Future<void> _initialize() async {
@@ -27,8 +41,10 @@ class StorageService implements StorageServiceInterface {
   Future<void> saveFcmToken(String token) async {
     try {
       await _initialize();
-      await _prefs!
-          .setString(FirebaseMessagingHandlerConstants.fcmTokenPrefKey, token);
+      await _prefs!.setString(
+        FirebaseMessagingHandlerConstants.fcmTokenPrefKey,
+        token,
+      );
       _logMessage('[StorageService] FCM token saved');
     } catch (error, stack) {
       _logMessage('[StorageService] Save FCM token error: $error');
@@ -40,10 +56,12 @@ class StorageService implements StorageServiceInterface {
   Future<String?> getFcmToken() async {
     try {
       await _initialize();
-      final String? token =
-          _prefs!.getString(FirebaseMessagingHandlerConstants.fcmTokenPrefKey);
+      final String? token = _prefs!.getString(
+        FirebaseMessagingHandlerConstants.fcmTokenPrefKey,
+      );
       _logMessage(
-          '[StorageService] FCM token retrieved: ${token != null ? 'found' : 'null'}');
+        '[StorageService] FCM token retrieved: ${token != null ? 'found' : 'null'}',
+      );
       return token;
     } catch (error, stack) {
       _logMessage('[StorageService] Get FCM token error: $error');
@@ -67,11 +85,13 @@ class StorageService implements StorageServiceInterface {
   @override
   Future<void> saveNotification(dynamic message) async {
     try {
+      if (!_saveNotifications) return;
       await _initialize();
 
       // Get existing notifications
-      final String? storedData =
-          _prefs!.getString(FirebaseMessagingHandlerConstants.sessionPrefKey);
+      final String? storedData = _prefs!.getString(
+        FirebaseMessagingHandlerConstants.sessionPrefKey,
+      );
       final List<Map<String, dynamic>> currentMessages = storedData != null
           ? List<Map<String, dynamic>>.from(jsonDecode(storedData))
           : [];
@@ -85,6 +105,12 @@ class StorageService implements StorageServiceInterface {
       if (!isDuplicate) {
         // Add new message
         currentMessages.add(message.toMap());
+        if (currentMessages.length > _maxStoredNotifications) {
+          currentMessages.removeRange(
+            0,
+            currentMessages.length - _maxStoredNotifications,
+          );
+        }
 
         // Save updated list
         await _prefs!.setString(
@@ -93,7 +119,8 @@ class StorageService implements StorageServiceInterface {
         );
 
         _logMessage(
-            '[StorageService] Notification saved: ${message.messageId}');
+          '[StorageService] Notification saved: ${message.messageId}',
+        );
       }
     } catch (error, stack) {
       _logMessage('[StorageService] Save notification error: $error');
@@ -105,8 +132,9 @@ class StorageService implements StorageServiceInterface {
   Future<List<dynamic>> getStoredNotifications() async {
     try {
       await _initialize();
-      final String? storedData =
-          _prefs!.getString(FirebaseMessagingHandlerConstants.sessionPrefKey);
+      final String? storedData = _prefs!.getString(
+        FirebaseMessagingHandlerConstants.sessionPrefKey,
+      );
 
       if (storedData != null) {
         final List<dynamic> jsonList = jsonDecode(storedData);
@@ -116,7 +144,8 @@ class StorageService implements StorageServiceInterface {
             .toList();
 
         _logMessage(
-            '[StorageService] Retrieved ${restoredMessages.length} stored notifications');
+          '[StorageService] Retrieved ${restoredMessages.length} stored notifications',
+        );
         return restoredMessages;
       }
 
@@ -219,8 +248,9 @@ class StorageService implements StorageServiceInterface {
   }) async {
     try {
       await _initialize();
-      final String? stored = _prefs!
-          .getString(FirebaseMessagingHandlerConstants.inAppMessagesPrefKey);
+      final String? stored = _prefs!.getString(
+        FirebaseMessagingHandlerConstants.inAppMessagesPrefKey,
+      );
       final List<Map<String, dynamic>> existing = stored != null
           ? List<Map<String, dynamic>>.from(jsonDecode(stored) as List)
           : <Map<String, dynamic>>[];
@@ -229,7 +259,8 @@ class StorageService implements StorageServiceInterface {
           ..['__nextEligibleAt'] = nextEligibleAt.toIso8601String();
       }
       existing.removeWhere(
-          (Map<String, dynamic> item) => item['id'] == message['id']);
+        (Map<String, dynamic> item) => item['id'] == message['id'],
+      );
       existing.add(message);
       await _prefs!.setString(
         FirebaseMessagingHandlerConstants.inAppMessagesPrefKey,
@@ -246,15 +277,17 @@ class StorageService implements StorageServiceInterface {
   Future<List<Map<String, dynamic>>> getPendingInAppMessages() async {
     try {
       await _initialize();
-      final String? stored = _prefs!
-          .getString(FirebaseMessagingHandlerConstants.inAppMessagesPrefKey);
+      final String? stored = _prefs!.getString(
+        FirebaseMessagingHandlerConstants.inAppMessagesPrefKey,
+      );
       if (stored == null) {
         return <Map<String, dynamic>>[];
       }
       final List<dynamic> decoded = jsonDecode(stored) as List<dynamic>;
       return decoded
           .map<Map<String, dynamic>>(
-              (dynamic item) => Map<String, dynamic>.from(item as Map))
+            (dynamic item) => Map<String, dynamic>.from(item as Map),
+          )
           .toList();
     } catch (error, stack) {
       _logMessage('[StorageService] Get pending in-app messages error: $error');
@@ -268,8 +301,9 @@ class StorageService implements StorageServiceInterface {
     try {
       await _initialize();
       if (id == null) {
-        await _prefs!
-            .remove(FirebaseMessagingHandlerConstants.inAppMessagesPrefKey);
+        await _prefs!.remove(
+          FirebaseMessagingHandlerConstants.inAppMessagesPrefKey,
+        );
         _logMessage('[StorageService] Pending in-app messages cleared');
         return;
       }
@@ -284,17 +318,20 @@ class StorageService implements StorageServiceInterface {
         jsonEncode(filtered),
       );
       _logMessage(
-          '[StorageService] Pending in-app message cleared for id: $id');
+        '[StorageService] Pending in-app message cleared for id: $id',
+      );
     } catch (error, stack) {
       _logMessage(
-          '[StorageService] Clear pending in-app messages error: $error');
+        '[StorageService] Clear pending in-app messages error: $error',
+      );
       _logMessage('[StorageService] Stack trace: $stack');
     }
   }
 
   @override
   Future<void> setPendingInAppMessages(
-      List<Map<String, dynamic>> messages) async {
+    List<Map<String, dynamic>> messages,
+  ) async {
     try {
       await _initialize();
       await _prefs!.setString(
@@ -327,7 +364,8 @@ class StorageService implements StorageServiceInterface {
     try {
       await _initialize();
       final String? stored = _prefs!.getString(
-          FirebaseMessagingHandlerConstants.inAppDeliveryHistoryPrefKey);
+        FirebaseMessagingHandlerConstants.inAppDeliveryHistoryPrefKey,
+      );
       if (stored == null) {
         return <String, dynamic>{};
       }
@@ -344,7 +382,8 @@ class StorageService implements StorageServiceInterface {
     try {
       await _initialize();
       await _prefs!.remove(
-          FirebaseMessagingHandlerConstants.inAppDeliveryHistoryPrefKey);
+        FirebaseMessagingHandlerConstants.inAppDeliveryHistoryPrefKey,
+      );
     } catch (error, stack) {
       _logMessage('[StorageService] Clear delivery history error: $error');
       _logMessage('[StorageService] Stack trace: $stack');
@@ -356,12 +395,15 @@ class StorageService implements StorageServiceInterface {
     try {
       await _initialize();
       final String? stored = _prefs!.getString(
-          FirebaseMessagingHandlerConstants.backgroundMessageQueuePrefKey);
+        FirebaseMessagingHandlerConstants.backgroundMessageQueuePrefKey,
+      );
       final List<Map<String, dynamic>> existing = stored != null
           ? List<Map<String, dynamic>>.from(jsonDecode(stored) as List)
           : <Map<String, dynamic>>[];
-      existing.removeWhere((Map<String, dynamic> item) =>
-          item['messageId'] == message['messageId']);
+      existing.removeWhere(
+        (Map<String, dynamic> item) =>
+            item['messageId'] == message['messageId'],
+      );
       existing.add(message);
       await _prefs!.setString(
         FirebaseMessagingHandlerConstants.backgroundMessageQueuePrefKey,
@@ -379,14 +421,16 @@ class StorageService implements StorageServiceInterface {
     try {
       await _initialize();
       final String? stored = _prefs!.getString(
-          FirebaseMessagingHandlerConstants.backgroundMessageQueuePrefKey);
+        FirebaseMessagingHandlerConstants.backgroundMessageQueuePrefKey,
+      );
       if (stored == null) {
         return <Map<String, dynamic>>[];
       }
       final List<dynamic> decoded = jsonDecode(stored) as List<dynamic>;
       return decoded
           .map<Map<String, dynamic>>(
-              (dynamic item) => Map<String, dynamic>.from(item as Map))
+            (dynamic item) => Map<String, dynamic>.from(item as Map),
+          )
           .toList();
     } catch (error, stack) {
       _logMessage('[StorageService] Get queued background error: $error');
@@ -401,13 +445,15 @@ class StorageService implements StorageServiceInterface {
       await _initialize();
       if (messageId == null) {
         await _prefs!.remove(
-            FirebaseMessagingHandlerConstants.backgroundMessageQueuePrefKey);
+          FirebaseMessagingHandlerConstants.backgroundMessageQueuePrefKey,
+        );
         return;
       }
       final List<Map<String, dynamic>> existing =
           await getQueuedBackgroundMessages();
       existing.removeWhere(
-          (Map<String, dynamic> item) => item['messageId'] == messageId);
+        (Map<String, dynamic> item) => item['messageId'] == messageId,
+      );
       await _prefs!.setString(
         FirebaseMessagingHandlerConstants.backgroundMessageQueuePrefKey,
         jsonEncode(existing),
@@ -419,7 +465,7 @@ class StorageService implements StorageServiceInterface {
   }
 
   void _logMessage(String message) {
-    if (kDebugMode) {
+    if (kDebugMode && _debugLoggingEnabled) {
       print(message);
     }
   }

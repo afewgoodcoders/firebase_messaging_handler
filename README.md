@@ -1,1040 +1,807 @@
-# Firebase Messaging Handler Plugin
-
-> Firebase Cloud Messaging for Flutter apps that need more than token retrieval: click streams, local display, scheduling, quiet hours, inbox storage, diagnostics, and in-app messages.
+# firebase_messaging_handler
 
 [![pub package](https://img.shields.io/pub/v/firebase_messaging_handler.svg)](https://pub.dev/packages/firebase_messaging_handler)
-[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+[![package score](https://img.shields.io/pub/points/firebase_messaging_handler)](https://pub.dev/packages/firebase_messaging_handler/score)
+[![license](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 
-## Table of Contents
+A practical notification layer for Flutter apps that use Firebase Cloud
+Messaging.
 
-- [Quick Start](#quick-start)
-- [Key Features](#key-features)
-- [What You Get](#what-you-get)
-- [Documentation Index](#documentation-index)
-- [Installation](#installation)
-- [Setup](#setup)
-- [Usage Examples](#usage-examples)
-- [Advanced Features](#advanced-features)
-- [In-App Messaging](#in-app-messaging)
-- [Foreground Notification Customization](#foreground-notification-customization)
-- [Analytics Integration](#analytics-integration)
-- [Notification Diagnostics](#notification-diagnostics)
-- [Quiet Hours & Throttling](#quiet-hours--throttling)
-- [Data-Only Bridging](#data-only-bridging)
-- [Testing Utilities](#testing-utilities)
-- [Payload Cookbook](#payload-cookbook)
-- [API Reference](#api-reference)
-- [Configuration](#configuration)
+It brings remote messages, local notifications, actions, scheduling, in-app
+messages, an inbox, user preferences, delivery policy, and diagnostics behind
+one API. The package is designed for apps that need more than “show a push,”
+while still leaving native notification details available when you need them.
+
+Version 2.0.0 introduces a typed notification envelope, a shared delivery
+policy, runtime capability reporting, a preference center, typed delivery
+events, and a reference server implementation.
+
+## What this package covers
+
+| Need | Package support |
+| --- | --- |
+| Receive FCM messages | Foreground, background, and notification-open paths |
+| Show notifications | Remote, local, data-only bridge, grouped, and threaded |
+| Interact without opening a screen | Action buttons and inline reply where the OS supports them |
+| Deliver later | One-time and recurring local schedules |
+| Control delivery | Categories, quiet hours, frequency limits, and daily caps |
+| Keep a history | Persistent notification inbox with a ready-made Flutter view |
+| Message inside the app | Built-in in-app layouts plus custom templates |
+| Observe what happened | Typed delivery events and analytics callbacks |
+| Diagnose setup | Permission, token, platform, and capability checks |
+| Send safely from a backend | Versioned schema and a tested TypeScript reference server |
+
+The package cannot override operating-system rules. Permission state, Android
+channels, Apple Focus modes, browser service workers, battery policy, and
+Firebase/APNs configuration still determine what a device can receive and
+display.
+
+## Contents
+
+- [Choose the delivery path first](#choose-the-delivery-path-first)
+- [Install](#install)
+- [Platform setup](#platform-setup)
+- [Initialize the handler](#initialize-the-handler)
+- [Handle notification opens](#handle-notification-opens)
+- [Tokens and topics](#tokens-and-topics)
+- [Local notifications](#local-notifications)
+- [Actions and inline reply](#actions-and-inline-reply)
+- [Scheduling](#scheduling)
+- [Groups, threads, badges, and sounds](#groups-threads-badges-and-sounds)
+- [Foreground presentation](#foreground-presentation)
+- [In-app messages](#in-app-messages)
+- [Preferences and delivery policy](#preferences-and-delivery-policy)
+- [Inbox](#inbox)
+- [Delivery events and analytics](#delivery-events-and-analytics)
+- [Payloads and server sending](#payloads-and-server-sending)
+- [Diagnostics and capabilities](#diagnostics-and-capabilities)
+- [Testing](#testing)
+- [Platform support](#platform-support)
 - [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
-- [Support](#support)
-- [What's Next?](#whats-next)
+- [Further documentation](#further-documentation)
 
-## Quick Start
+## Choose the delivery path first
 
-```dart
-import 'package:firebase_messaging_handler/firebase_messaging_handler.dart';
+The most important decision is who presents a remote notification.
 
-// Initialize the plugin
-final Stream<NotificationData?>? clickStream = await FirebaseMessagingHandler.instance.init(
-  senderId: 'your_sender_id',
-  androidChannelList: [
-    NotificationChannelData(
-      id: 'default_channel',
-      name: 'Default Notifications',
-      description: 'Default notification channel',
-      importance: NotificationImportanceEnum.high,
-      priority: NotificationPriorityEnum.high,
-      playSound: true,
-      enableVibration: true,
-      enableLights: true,
-    ),
-  ],
-  androidNotificationIconPath: '@drawable/ic_notification',
-  updateTokenCallback: (fcmToken) async {
-    // Send token to your backend
-    print('FCM Token: $fcmToken');
-    return true;
-  },
-);
+### System-presented remote notifications
 
-// Listen to notification clicks
-clickStream?.listen((NotificationData? data) {
-  if (data != null) {
-    print('Notification clicked: ${data.title}');
-    // Handle notification click
-  }
-});
-```
+Send an FCM `notification` payload when the alert must be presented as
+reliably as the operating system allows while the app is backgrounded or
+terminated. FCM/APNs owns presentation in those states.
 
-## Key Features
+This is the usual choice for chat messages, account alerts, and other
+user-visible transactional notifications.
 
-### Core Features
-- **Cross-platform support** - Android, iOS, Web, plus desktop local-mode support on Windows/Linux
-- **Unified notification stream** - Handle foreground, background, and terminated clicks in one place
-- **Initial notification control** - Choose stream delivery or separate startup handling
-- **Token management** - Fetch, cache, clear, and sync FCM tokens with a backend callback
-- **Failure visibility** - Surface token, permission, badge, and background-handler issues through logs and diagnostics
+There is a tradeoff: client-side preferences and quiet hours cannot stop an
+alert that the operating system has already displayed.
 
-### Advanced Features
-- **Interactive notification actions** - Custom buttons with payload handling
-- **Notification scheduling** - One-time and recurring notifications with device-timezone-aware scheduling
-- **Badge management** - Cross-platform badge count helpers
-- **Notification grouping** - Android groups and iOS conversation threads
-- **Custom sound support** - Platform-specific sound customization
-- **Analytics hooks** - Track notification events with your own analytics callback
-- **Testing utilities** - Mock data and streams for unit and widget tests
-- **Notification doctor** - Diagnose permissions, tokens, badges, and background wiring in seconds
-- **Web-safe fallbacks** - Degrade scheduling/actions/badges when unsupported in browsers
-- **Quiet hours & frequency caps** - Control delivery cadence with lifecycle-aware helpers
-- **Data-only bridging** - Promote silent payloads into local notifications when needed
-- **Inbox storage** - Typed inbox model with SharedPreferences default and
-  in-memory test store for read/delete flows
-- **Unified handler** - Single callback for foreground/background/terminated with normalized payloads
-- **In-app messaging** - Trigger in-app templates from silent FCM payloads
-- **Foreground controls** - Customize fallback foreground notifications
-- **In-app templates** - Welcome, promotion, alert, success, and info templates
-- **Activity timeline** - Persistent notification history with detailed timestamps
-- **Setup retry logic** - Retry Firebase setup when the error is recoverable
-- **Guided setup** - Firebase configuration checks with package name guidance
+### Client-presented remote notifications
 
-## What You Get
+Send a data-only message when the app must evaluate package-managed categories,
+quiet hours, caps, deduplication, or custom presentation before showing
+anything. The package can turn a valid data message into a local notification.
 
-Start with the click stream, then opt into the pieces your app actually needs.
+Data-only delivery is best-effort when the app is not active. Android power
+management, Apple background execution limits, force-stop state, and message
+priority can delay or prevent it.
 
-- **Core (always on)**: unified click stream, terminated-notification getter, token lifecycle management, platform badge helpers.
-- **Optional power-ups**: scheduling, recurring rules, grouping, custom sounds, analytics callbacks, in-app templates, foreground overrides, mock/testing utilities.
-- **One package dependency**: the plugin depends on `firebase_messaging` for you, so your app adds this package and configures Firebase once.
-- **Progressive adoption**: wire up the click stream today, add interactive actions or in-app templates later without touching existing code.
-- **Configuration-at-callsite**: all advanced APIs expose per-call parameters so you can tailor a single notification without changing global settings.
-- **Navigation flexibility**: Showcase example routes via a root `Navigator` key, demonstrating payload-driven navigation without relying on a BuildContext.
-- **Desktop local mode**: on Windows/Linux, FCM APIs are disabled gracefully while local notifications, scheduling, inbox, quiet hours, and in-app templates remain available.
+### Local and in-app notifications
 
-## Documentation Index
+Use local notifications for reminders produced on the device. Use in-app
+messages for content that should appear only while the user is in the app.
+Both paths participate in package-managed preferences and delivery policy.
 
-Use the README as the landing page, then jump to the deeper guides:
+For mixed products, it is normal to use all three approaches:
 
-- **Best starting point**: begin with [Installation](doc/getting-started/installation.md), then follow the platform setup guide for the targets you ship.
-- **Getting started**: [Installation](doc/getting-started/installation.md), [Android setup](doc/getting-started/android-setup.md), [iOS setup](doc/getting-started/ios-setup.md), [macOS setup](doc/getting-started/macos-setup.md), [Desktop setup](doc/getting-started/desktop-setup.md), [Web setup](doc/getting-started/web-setup.md)
-- **Feature guides**: [Push notifications](doc/features/push-notifications.md), [In-app messaging](doc/features/in-app-messaging.md), [Notification inbox](doc/features/notification-inbox.md), [Scheduling](doc/features/scheduling.md), [Badges](doc/features/badges.md), [Quiet hours](doc/features/quiet-hours.md), [Diagnostics](doc/features/diagnostics.md), [Server recipes](doc/features/server-recipes.md)
-- **Release process**: [Release checklist](doc/release-checklist.md)
-- **Backend payloads**: [Payload cookbook](#payload-cookbook), [Server recipes](server_recipes/README.md)
-- **Project docs**: [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), [Example app guide](example/README.md)
+- system-presented remote notifications for time-sensitive alerts;
+- data-only messages for policy-controlled campaigns;
+- local schedules for device-owned reminders;
+- in-app messages for contextual education and promotion.
 
-## Why this over raw Firebase or Awesome Notifications?
+## Install
 
-| Capability | Raw firebase_messaging | Awesome Notifications | This package |
-| --- | --- | --- | --- |
-| Background & terminated clicks | Manual isolate wiring | Yes | Automatic unified stream |
-| Badges & sounds | Manual per-platform | Yes, heavier setup | Built in |
-| In-app UI / inbox | None | Partial, paid features | Inbox widget + in-app templates |
-| License | BSD | Commercial/freemium | BSD-3-Clause |
-| Setup effort | High | Medium/heavy | Lower, with diagnostics |
-
-> Current focus: keep setup diagnostics, platform guidance, and release validation explicit so teams can ship FCM without rediscovering platform-specific edge cases.
-
-### Architecture Benefits
-- **Modular design** - Clear separation between facade, managers, services, interfaces, and models
-- **Testability** - Interface-based services and in-memory stores keep tests practical
-- **Maintainability** - Features are grouped by lifecycle, presentation, storage, and diagnostics concerns
-- **Backward compatibility** - Existing public APIs are kept stable across patch releases
-- **Reasonable runtime cost** - Work is mostly event-driven and initialized lazily where possible
-
-## Installation
-
-Add this to your package's `pubspec.yaml` file:
+Add the package:
 
 ```yaml
 dependencies:
-  firebase_messaging_handler: ^1.0.6
+  firebase_messaging_handler: ^2.0.0
 ```
 
-## Setup
+Then fetch packages:
 
-### Quick Setup
+```bash
+flutter pub get
+```
 
-1. **Add dependency:**
-   ```yaml
-   dependencies:
-     firebase_messaging_handler: ^1.0.6
-   ```
+Minimum versions:
 
-2. **Add basic permissions to `android/app/src/main/AndroidManifest.xml`:**
-   ```xml
-   <!-- Basic Firebase Messaging -->
-   <uses-permission android:name="android.permission.INTERNET" />
-   <uses-permission android:name="android.permission.WAKE_LOCK" />
-   <uses-permission android:name="android.permission.VIBRATE" />
-   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-   ```
-   
-   Need scheduling, actions, or boot restore? See the [Detailed Permissions Guide](#android-setup) below.
+- Dart 3.10 or later
+- Flutter 3.38.1 or later
+- Android API 24 or later
+- Android `compileSdk` 36 or later
 
-3. **Initialize in your app:**
-   ```dart
-   await FirebaseMessagingHandler.instance.init(
-     senderId: 'your_sender_id',
-     androidChannelList: [/* channels */],
-     androidNotificationIconPath: '@drawable/ic_notification',
-   );
-   ```
+You still need to configure Firebase in the host application. This package
+does not replace `firebase_core` setup or the platform configuration files
+created by FlutterFire.
 
-4. **(Optional) Wire the background handler:**
-   ```dart
-   await FirebaseMessagingHandler.instance.configureBackgroundMessageHandler(
-     firebaseMessagingHandlerBackgroundDispatcher,
-   );
-   ```
-   > Use your own top-level handler if you need custom logic—just remember to call `FirebaseMessagingHandler.handleBackgroundMessage(message)` first.
+## Platform setup
 
-### Unified Handler (all lifecycles)
+### Firebase
+
+The shortest route is the FlutterFire CLI:
+
+```bash
+dart pub global activate flutterfire_cli
+flutterfire configure
+```
+
+Initialize Firebase before initializing the notification handler:
+
 ```dart
-await FirebaseMessagingHandler.instance.setUnifiedMessageHandler(
-  (NormalizedMessage message, NotificationLifecycle lifecycle) async {
-    debugPrint('[unified] lifecycle=$lifecycle title=${message.title}');
-    // Return true to mark handled and skip default rendering; false to let the plugin render/queue.
-    if (lifecycle == NotificationLifecycle.foreground) {
-      // e.g., custom in-app banner instead of system notification
-      return true;
-    }
-    return false;
-  },
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
+await Firebase.initializeApp(
+  options: DefaultFirebaseOptions.currentPlatform,
 );
 ```
-Handler receives normalized fields (id, title, body, data, channelId, analytics, lifecycle, rawMessage). Works for foreground, background, resume, and terminated paths.
 
-5. **Done.** Your app now has Firebase notification handling wired.
+Keep Firebase service-account credentials on a trusted server. Never include a
+service-account JSON file in a Flutter app.
 
-### Minimal Setup (Basic Notifications Only)
+### Android
 
-**For apps that only need basic push notifications:**
+Place `google-services.json` in `android/app/` and apply the Google Services
+Gradle plugin as required by FlutterFire.
+
+For basic delivery, declare:
 
 ```xml
-<!-- Minimal permissions for basic notifications -->
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.WAKE_LOCK" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.VIBRATE" />
 ```
 
-**What you get:**
-- Push notifications from Firebase
-- Background message handling
-- Notification vibration
-- No scheduled notifications
-- No foreground notifications
-- No advanced features
-
-### Detailed Setup
-
-### 1. Firebase Project Setup
-
-1. Create a Firebase project at [Firebase Console](https://console.firebase.google.com/)
-2. Add your Android and iOS apps to the project
-3. Download configuration files:
-   - `google-services.json` → `android/app/`
-   - `GoogleService-Info.plist` → `ios/Runner/`
-
-### 2. Platform Configuration
-
-#### Android Setup
-
-Add to `android/app/build.gradle`:
-
-```gradle
-dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-}
-```
-
-**Android Permissions Guide**
-
-**Choose only the permissions you need based on your features:**
-
-### Basic Notifications (Most Apps Need This)
-
-```xml
-<!-- REQUIRED: Basic Firebase Messaging -->
-<uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.WAKE_LOCK" />
-
-<!-- REQUIRED: Notification Display -->
-<uses-permission android:name="android.permission.VIBRATE" />
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-```
-
-**When to use:** Basic push notifications, message handling, foreground notifications
-
-### Scheduled Notifications (Optional)
-
-```xml
-<!-- REQUIRED: Scheduled Notifications -->
-<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-```
-
-**When to use:** Only if you use `scheduleNotification()` or `scheduleRecurringNotification()`
-
-### Advanced Features (Optional)
-
-```xml
-<!-- REQUIRED: Background Processing -->
-<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-<!-- REQUIRED: Notification Actions -->
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-```
-
-**When to use:** Interactive notifications, background processing, notification actions
-
-**Quick Decision Guide:**
-
-| Feature | Permissions Needed |
-|---------|-------------------|
-| **Basic push notifications** | `INTERNET` + `WAKE_LOCK` + `VIBRATE` + `FOREGROUND_SERVICE` |
-| **Scheduled notifications** | Add `SCHEDULE_EXACT_ALARM` + `USE_EXACT_ALARM` + `RECEIVE_BOOT_COMPLETED` |
-| **Interactive notifications** | Add `FOREGROUND_SERVICE` (already included in basic) |
-| **Background processing** | Add `RECEIVE_BOOT_COMPLETED` |
-
-Start with the basic permissions, then add the optional permissions only when you use the matching feature.
-
-**Why These Permissions?**
-
-| Permission | Why We Need It | What Happens Without It |
-|------------|----------------|------------------------|
-| `INTERNET` | Firebase messaging requires internet connection | No push notifications |
-| `WAKE_LOCK` | Keeps device awake to process background messages | Messages may be missed while the device sleeps |
-| `VIBRATE` | Makes notifications noticeable | Notifications are silent |
-| `FOREGROUND_SERVICE` | Shows notifications when app is active | Foreground notifications may not display |
-| `SCHEDULE_EXACT_ALARM` | Allows precise notification timing | Exact scheduled notifications fail |
-| `USE_EXACT_ALARM` | Required for exact alarm scheduling | Exact scheduled notifications fail |
-| `RECEIVE_BOOT_COMPLETED` | Restores scheduled notifications after reboot | Scheduled notifications are lost after reboot |
-
-#### iOS Setup
-
-Add to `ios/Runner/AppDelegate.swift`:
-
-```swift
-import Firebase
-
-@main
-@objc class AppDelegate: FlutterAppDelegate {
-  override func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  ) -> Bool {
-    FirebaseApp.configure()
-    GeneratedPluginRegistrant.register(with: self)
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-}
-```
-
-**iOS APNs Setup Required:**
-
-For iOS notifications to work properly, you **MUST** configure APNs:
-
-1. **Generate APNs Key:**
-   - Go to [Apple Developer Console](https://developer.apple.com/)
-   - Navigate to Certificates, Identifiers & Profiles
-   - Go to Keys section
-   - Create a new key with "Apple Push Notifications service (APNs)" enabled
-   - Download the `.p8` key file
-
-2. **Upload to Firebase:**
-   - Go to Firebase Console > Project Settings > Cloud Messaging
-   - Scroll to "Apple app configuration"
-   - Upload your APNs key (`.p8` file)
-   - Enter your Key ID and Team ID
-   - Choose environment: Sandbox (development) or Production
-
-3. **Without APNs setup:**
-   - iOS notifications will NOT work
-   - FCM tokens will show "APNs token not set" error
-   - This is normal behavior until APNs is configured
-
-This is a Firebase/APNs requirement, not a plugin limitation.
-
-#### Web Setup (Optional)
-
-Add to `web/index.html`:
-
-```html
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging.js"></script>
-```
-
-> **Browser caveats:** Browsers do not support local scheduling, notification action buttons, or app-icon badges. Calls to those APIs are safely ignored and surfaced by the diagnostics helper.
-
-## Usage Examples
-
-### Working Example
+Android 13 and later requires a runtime notification permission. Ask after
+showing UI that explains why your app needs it:
 
 ```dart
-import 'package:flutter/material.dart';
-import 'package:firebase_messaging_handler/firebase_messaging_handler.dart';
+final settings = await FirebaseMessagingHandler.instance
+    .requestNotificationPermission();
+```
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Firebase
-  await Firebase.initializeApp();
-  
-  // Initialize Firebase Messaging Handler
-  final Stream<NotificationData?>? clickStream = await FirebaseMessagingHandler.instance.init(
-    senderId: 'your_sender_id',
-    androidChannelList: [
-      NotificationChannelData(
-        id: 'default_channel',
-        name: 'Default Notifications',
-        description: 'Default notification channel',
-        importance: NotificationImportanceEnum.high,
-        priority: NotificationPriorityEnum.high,
-        playSound: true,
-        enableVibration: true,
-      ),
-    ],
-    androidNotificationIconPath: '@drawable/ic_notification',
-    updateTokenCallback: (fcmToken) async {
-      print('FCM Token: $fcmToken');
-      // Send token to your backend
-      return true;
-    },
+Use a white-on-transparent drawable for the small notification icon:
+
+```text
+android/app/src/main/res/drawable/ic_notification.png
+```
+
+Pass it as `@drawable/ic_notification` during initialization. A launcher icon
+works as a development fallback, but usually renders poorly in the status bar.
+
+Scheduling notes:
+
+- inexact scheduling is the default and needs no exact-alarm permission;
+- add `SCHEDULE_EXACT_ALARM` only if the product genuinely needs exact timing;
+- add `RECEIVE_BOOT_COMPLETED` if schedules must survive a reboot;
+- `USE_EXACT_ALARM` is subject to Google Play policy and is not a general
+  replacement for `SCHEDULE_EXACT_ALARM`.
+
+Query runtime support and request exact-alarm access only when needed:
+
+```dart
+final capabilities =
+    await FirebaseMessagingHandler.instance.getCapabilities();
+
+if (capabilities.supports(NotificationCapability.exactScheduling)) {
+  await FirebaseMessagingHandler.instance.requestExactAlarmPermission();
+}
+```
+
+See [Android setup](doc/getting-started/android-setup.md) for the complete host
+configuration.
+
+### iOS
+
+Add `GoogleService-Info.plist` to the Runner target, then enable:
+
+- Push Notifications
+- Background Modes → Remote notifications
+
+Upload or connect a valid APNs authentication key in Firebase. Real remote
+delivery must be tested on a physical device.
+
+Firebase Messaging normally uses AppDelegate method swizzling to map APNs
+tokens and notification callbacks. Leave `FirebaseAppDelegateProxyEnabled`
+enabled unless the host app implements Firebase’s complete manual forwarding.
+
+Rich images in remote notifications require an app-owned Notification Service
+Extension and `mutable-content: 1`. A starting template is included at
+[ios/NotificationServiceExtension.template.swift](ios/NotificationServiceExtension.template.swift).
+
+Register Apple action categories during package initialization so their actions
+exist before a notification arrives.
+
+See [iOS setup](doc/getting-started/ios-setup.md).
+
+### macOS
+
+Add the Firebase macOS configuration to the host target and enable the
+appropriate signing, notification, and background capabilities. Local
+notifications, schedules, actions, inbox, policy, and in-app presentation are
+available. Remote delivery depends on the host’s Firebase/APNs configuration
+and should be verified on the target you ship.
+
+See [macOS setup](doc/getting-started/macos-setup.md).
+
+### Web
+
+Configure Firebase for the Flutter web app, then copy
+[web/firebase-messaging-sw.template.js](web/firebase-messaging-sw.template.js)
+to the deployed app as `firebase-messaging-sw.js`. Fill in the public Firebase
+configuration and register the worker at the scope that controls the app.
+
+Pass your public Web Push certificate as `webVapidKey`. Browser permission and
+token creation should be started from a user gesture:
+
+```dart
+await FirebaseMessagingHandler.instance.requestNotificationPermission();
+await FirebaseMessagingHandler.instance.synchronizeToken();
+```
+
+Web supports remote delivery and worker action messages. Durable local
+scheduling and inline notification reply are not portable browser features.
+
+See [web setup](doc/getting-started/web-setup.md).
+
+### Windows and Linux
+
+Windows and Linux operate in desktop local mode. You can use local
+presentation, inbox, preferences, delivery policy, in-app templates, and the
+local scheduling features reported at runtime. FlutterFire FCM token and topic
+APIs are not available on these targets.
+
+Windows local notifications require an application identity. Supply
+`WindowsNotificationOptions` during initialization and follow the host setup
+required by `flutter_local_notifications`.
+
+See [desktop setup](doc/getting-started/desktop-setup.md).
+
+## Initialize the handler
+
+Use one shared handler instance. Initialization returns a broadcast stream of
+notification-open data:
+
+```dart
+import 'dart:async';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging_handler/firebase_messaging_handler.dart';
+import 'package:flutter/material.dart';
+
+import 'firebase_options.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
+StreamSubscription<NotificationData?>? notificationOpenSubscription;
+
+Future<void> configureNotifications() async {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Listen to notification clicks
-  clickStream?.listen((NotificationData? data) {
+  final handler = FirebaseMessagingHandler.instance;
+
+  final openStream = await handler.initialize(
+    FCMConfiguration(
+      webVapidKey: const String.fromEnvironment('WEB_VAPID_KEY'),
+      androidNotificationIconPath: '@drawable/ic_notification',
+      defaultChannelId: 'general',
+      androidChannels: [
+        NotificationChannelData(
+          id: 'general',
+          name: 'General',
+          description: 'General app notifications',
+          importance: NotificationImportanceEnum.high,
+          priority: NotificationPriorityEnum.high,
+        ),
+      ],
+      notificationCategories: const [
+        NotificationCategory(
+          id: 'messages',
+          name: 'Messages',
+          description: 'New messages and replies',
+        ),
+        NotificationCategory(
+          id: 'product_updates',
+          name: 'Product updates',
+          defaultEnabled: true,
+        ),
+      ],
+      deliveryPolicy: const NotificationDeliveryPolicy(
+        quietHours: NotificationQuietHours(
+          startHour: 22,
+          endHour: 7,
+        ),
+        perCategoryInterval: Duration(minutes: 2),
+        globalDailyCap: 20,
+      ),
+      updateTokenCallback: uploadTokenToYourBackend,
+      enableDefaultDataOnlyBridge: true,
+      dataOnlyBridgeChannelId: 'general',
+      enableDebugLogging: false,
+    ),
+  );
+
+  handler.setInAppNavigatorKey(navigatorKey);
+
+  notificationOpenSubscription = openStream?.listen((data) {
     if (data != null) {
-      print('Notification clicked: ${data.title}');
-      // Handle notification click
+      routeFromNotification(data);
     }
   });
-
-  // Initial launch notifications are emitted onto the same stream by default.
-  // Set includeInitialNotificationInStream: false to opt out if you need to
-  // defer handling (e.g., until after auth).
-
-  runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Firebase Messaging Handler Demo',
-      home: MyHomePage(),
-    );
+Future<bool> uploadTokenToYourBackend(String token) async {
+  // Associate the token with the signed-in installation on your server.
+  return true;
+}
+
+void routeFromNotification(NotificationData data) {
+  final route = data.payload['route'] as String?;
+  if (route != null) {
+    navigatorKey.currentState?.pushNamed(route, arguments: data.payload);
   }
 }
+```
 
-class MyHomePage extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('FCM Handler Demo')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: () async {
-                // Show a test notification
-                await FirebaseMessagingHandler.instance.showNotificationWithActions(
-                  title: 'Test Notification',
-                  body: 'This is a test notification',
-                  actions: [
-                    NotificationAction(
-                      id: 'reply',
-                      title: 'Reply',
-                      payload: {'action': 'reply'},
-                    ),
-                    NotificationAction(
-                      id: 'dismiss',
-                      title: 'Dismiss',
-                      payload: {'action': 'dismiss'},
-                    ),
-                  ],
-                );
-              },
-              child: Text('Send Test Notification'),
-            ),
-            SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () async {
-                // Schedule a notification
-                await FirebaseMessagingHandler.instance.scheduleNotification(
-                  id: 1,
-                  title: 'Scheduled Notification',
-                  body: 'This notification was scheduled',
-                  scheduledDate: DateTime.now().add(Duration(minutes: 1)),
-                );
-              },
-              child: Text('Schedule Notification'),
-            ),
-          ],
-        ),
+`FCMConfiguration` deliberately does not request permission or synchronize a
+token by default. This lets the app choose the right moment for its permission
+prompt—especially on the web, where the call needs a user gesture.
+
+After the user opts in:
+
+```dart
+final settings = await FirebaseMessagingHandler.instance
+    .requestNotificationPermission(
+      options: const NotificationPermissionOptions(
+        alert: true,
+        badge: true,
+        sound: true,
       ),
     );
-  }
+
+await FirebaseMessagingHandler.instance.synchronizeToken();
+```
+
+If a simple app intentionally wants those side effects during startup, set
+`requestPermissionOnInitialize` and `synchronizeTokenOnInitialize` to `true`.
+For new code, prefer `initialize(FCMConfiguration)` over the older `init(...)`
+convenience method.
+
+Dispose long-lived listeners when their owner is disposed:
+
+```dart
+await notificationOpenSubscription?.cancel();
+await FirebaseMessagingHandler.instance.dispose();
+```
+
+### Background processing
+
+Register a top-level background entry point before `runApp`:
+
+```dart
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_messaging_handler/firebase_messaging_handler.dart';
+import 'package:flutter/widgets.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await FirebaseMessagingHandler.instance.configureBackgroundMessageHandler(
+    appNotificationBackgroundHandler,
+  );
+
+  runApp(const App());
+}
+
+@pragma('vm:entry-point')
+Future<void> appNotificationBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await FirebaseMessagingHandler.handleBackgroundMessage(message);
+
+  // Do short, isolate-safe work here if your app needs it.
 }
 ```
 
-### Showcase Example App
+The callback must be top-level or static. On Android it can run in another
+isolate, so it must not depend on widget state or closures created in the main
+isolate.
 
-The `example/` directory doubles as an FCM showcase powered by this plugin:
-
-- **Guided onboarding banner** - copy your FCM token, open the Firebase console, and follow the three-step testing loop.
-- **Quick start scenarios** - fire interactive pushes, schedule one-time or recurring notifications, and generate Android groups with a tap.
-- **Power utilities** - update badges, register custom sound channels, and clear demo data while analytics events stream in.
-- **Scenario detail screen** - every notification routes to a dedicated inspector showing payloads, actions, badges, and metadata.
-- **Activity timeline** - watch a running log of initialization, scheduling, clears, and custom actions.
-- **Template playground** - paste sample silent payloads to preview the generic template renderer in real time.
-
-Run `flutter run` inside `example/` to explore it.
-
-### Basic Setup
+If background work needs custom service setup, provide the same top-level
+bootstrap function to `handleBackgroundMessage`:
 
 ```dart
-// Initialize the plugin
-final Stream<NotificationData?>? clickStream = await FirebaseMessagingHandler.instance.init(
-  senderId: 'your_sender_id',
-  androidChannelList: channels,
-  androidNotificationIconPath: '@drawable/ic_notification',
-  updateTokenCallback: (fcmToken) async {
-    // Send token to your backend
-    return true;
-  },
-);
+@pragma('vm:entry-point')
+Future<void> initializeBackgroundDependencies() async {
+  // Initialize only the services needed by background processing.
+}
 
-// Listen to notification clicks
-clickStream?.listen((NotificationData? data) {
-  if (data != null) {
-    // Handle notification click
-  }
-});
+@pragma('vm:entry-point')
+Future<void> appNotificationBackgroundHandler(RemoteMessage message) async {
+  await FirebaseMessagingHandler.handleBackgroundMessage(
+    message,
+    bootstrap: initializeBackgroundDependencies,
+  );
+}
 ```
 
-### Interactive Notifications
+You can also run application work after the package hydrates its background
+queues:
 
 ```dart
-// Show notification with action buttons
-await FirebaseMessagingHandler.instance.showNotificationWithActions(
-  title: 'New Message',
-  body: 'You have a new message from John',
+await FirebaseMessagingHandler.instance
+    .configureBackgroundProcessingCallback((message) async {
+      await processBusinessEvent(message.data);
+      return true; // false asks the package to queue the message for retry.
+    });
+```
+
+Keep background handlers short. The operating system owns their execution
+window.
+
+## Handle notification opens
+
+The stream returned by `initialize` is the main route for notification taps.
+When `includeInitialNotificationInStream` is true (the default), it also
+includes the notification that launched a terminated app.
+
+If your architecture handles cold starts separately, turn that option off and
+read the initial item explicitly:
+
+```dart
+final initial = await FirebaseMessagingHandler.checkInitial();
+if (initial != null) {
+  routeFromNotification(initial);
+}
+```
+
+`NotificationData` includes the application payload, title, body, image,
+category, actions, message ID, lifecycle-derived type, and whether it came from
+a terminated launch.
+
+For message processing that should be consistent across foreground,
+background, resume, and initial delivery, register a unified handler:
+
+```dart
+await FirebaseMessagingHandler.instance.setUnifiedMessageHandler(
+  (message, lifecycle) async {
+    if (message.data['kind'] == 'sync_only') {
+      await synchronizeRecord(message.data['recordId']);
+      return true;
+    }
+
+    return false; // Continue through normal package presentation.
+  },
+);
+```
+
+Use the notification-open stream for navigation. Use the unified handler for
+business processing. Keeping those jobs separate avoids trying to navigate from
+a background isolate.
+
+## Tokens and topics
+
+Fetch and upload the current registration token:
+
+```dart
+final token = await FirebaseMessagingHandler.instance.getFcmToken();
+
+if (token == null) {
+  debugPrint(FirebaseMessagingHandler.instance.lastTokenError);
+}
+
+await FirebaseMessagingHandler.instance.synchronizeToken();
+```
+
+When `updateTokenCallback` is configured, the package also listens for token
+refreshes. Your backend should treat tokens as rotating installation
+identifiers, not permanent user IDs:
+
+- associate a token with the authenticated installation;
+- update the association when the token rotates;
+- remove it on sign-out or when FCM reports the token is stale;
+- never log full tokens in production analytics.
+
+Topic subscriptions are tracked locally so they can be inspected and removed:
+
+```dart
+await FirebaseMessagingHandler.instance.subscribeToTopic('release_notes');
+
+final topics =
+    await FirebaseMessagingHandler.instance.getSubscribedTopics();
+
+await FirebaseMessagingHandler.instance
+    .unsubscribeFromTopic('release_notes');
+
+await FirebaseMessagingHandler.instance.unsubscribeFromAllTopics();
+```
+
+Use topics for broad, non-sensitive segments. Enforce authorization on your
+server for private or user-specific messages.
+
+## Local notifications
+
+For a simple local notification with action buttons, use
+`showNotificationWithActions`. For native styles and full control, use the
+typed `LocalNotificationRequest`:
+
+```dart
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+final result = await FirebaseMessagingHandler.instance.showLocalNotification(
+  const LocalNotificationRequest(
+    id: 42,
+    title: 'Upload complete',
+    body: 'Your report is ready to review.',
+    channelId: 'general',
+    category: 'product_updates',
+    payload: {
+      'route': '/reports/42',
+      'reportId': '42',
+    },
+    androidDetails: AndroidNotificationDetails(
+      'general',
+      'General',
+      channelDescription: 'General app notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+      styleInformation: BigTextStyleInformation(
+        'The quarterly report finished uploading and is ready to review.',
+      ),
+    ),
+    appleDetails: DarwinNotificationDetails(
+      threadIdentifier: 'reports',
+    ),
+  ),
+);
+
+if (!result.isSuccess) {
+  debugPrint('Notification failed: ${result.errorCode} ${result.message}');
+}
+```
+
+The native detail fields are intentional escape hatches. They expose upstream
+Android, Apple, Linux, and Windows options for big picture, inbox, messaging,
+media, progress, call layouts, attachments, interruption levels, relevance,
+full-screen intents, and other platform-specific presentation.
+
+Before exposing a feature in UI, query `getCapabilities()`. Unsupported
+operations return typed errors instead of pretending to succeed.
+
+## Actions and inline reply
+
+Define stable action IDs and route them from the package’s click and delivery
+event streams:
+
+```dart
+final shown = await FirebaseMessagingHandler.instance
+    .showNotificationWithActions(
+      title: 'New message from Priya',
+      body: 'Are we still meeting at 3?',
+      channelId: 'general',
+      actionCategoryId: 'message_actions',
+      payload: const {
+        'route': '/messages/123',
+        'conversationId': '123',
+      },
+      actions: const [
+        NotificationAction(
+          id: 'reply',
+          title: 'Reply',
+          textInput: true,
+          inputLabel: 'Write a reply',
+          inputButtonTitle: 'Send',
+          inputChoices: ['Yes', 'No', 'In 10 minutes'],
+        ),
+        NotificationAction(
+          id: 'mark_read',
+          title: 'Mark as read',
+          foreground: false,
+        ),
+      ],
+    );
+```
+
+Apple action categories must be registered during initialization:
+
+```dart
+const messageActions = NotificationActionCategory(
+  id: 'message_actions',
   actions: [
     NotificationAction(
       id: 'reply',
       title: 'Reply',
-      payload: {'action': 'reply', 'user_id': '123'},
+      textInput: true,
+      inputLabel: 'Write a reply',
+      inputButtonTitle: 'Send',
     ),
     NotificationAction(
-      id: 'view',
-      title: 'View',
-      payload: {'action': 'view', 'message_id': '456'},
-    ),
-    NotificationAction(
-      id: 'dismiss',
-      title: 'Dismiss',
-      payload: {'action': 'dismiss'},
+      id: 'mark_read',
+      title: 'Mark as read',
+      foreground: false,
     ),
   ],
 );
-```
 
-### Inbox Storage (typed, persistent)
-
-Use the default SharedPreferences-backed inbox store to fuel a history or inbox
-UI with read/delete support.
-
-```dart
-final inbox = InboxStorageService();
-
-await inbox.upsert(
-  NotificationInboxItem(
-    id: 'welcome',
-    title: 'Welcome!',
-    body: 'Thanks for installing the app.',
-    timestamp: DateTime.now(),
-    data: {'origin': 'campaign_welcome'},
+await FirebaseMessagingHandler.instance.initialize(
+  const FCMConfiguration(
+    actionCategories: [messageActions],
   ),
 );
-
-final List<NotificationInboxItem> page =
-    await inbox.fetch(page: 0, pageSize: 20);
-
-await inbox.markRead([page.first.id]);
-await inbox.delete([page.first.id]);
 ```
 
-> For tests or ephemeral state, use `InMemoryInboxStorage`, which keeps items
-> purely in memory.
+Action behavior varies by platform. Inline reply is available on Android and
+Apple platforms; it is not a portable web feature. Check
+`NotificationCapability.inlineReply` before advertising it.
 
-#### Inbox UI widget
+## Scheduling
+
+Schedule a one-time reminder:
 
 ```dart
-NotificationInboxView(
-  storage: InboxStorageService(),
-  onItemTap: (item) {
-    // Navigate or open detail
-  },
-  onActionTap: (actionId, item) {
-    // Handle custom buttons stored in item.actions
-  },
-  onDelete: (ids) async {
-    // Optional: sync deletions to backend
-  },
+final scheduled = await FirebaseMessagingHandler.instance.scheduleNotification(
+  id: 1001,
+  title: 'Stand-up in 10 minutes',
+  body: 'Open the agenda before the call.',
+  scheduledDate: DateTime.now().add(const Duration(minutes: 10)),
+  channelId: 'general',
+  payload: const {'route': '/meetings/daily'},
 );
 ```
 
-### Notification Scheduling
+Inexact delivery is the safest default for general reminders. Ask for exact
+alarm access only when the product requirement justifies it:
 
-Scheduled notifications use the device timezone. If your app reschedules reminders on resume, refresh the timezone first:
+```dart
+final allowed = await FirebaseMessagingHandler.instance
+    .requestExactAlarmPermission();
+
+if (allowed) {
+  await FirebaseMessagingHandler.instance.scheduleNotification(
+    id: 1002,
+    title: 'Medication',
+    body: 'It is time for your scheduled dose.',
+    scheduledDate: nextDose,
+    scheduleMode: NotificationScheduleMode.exactAllowWhileIdle,
+    fallbackToInexact: true,
+  );
+}
+```
+
+Recurring and weekly schedules are also available:
+
+```dart
+await FirebaseMessagingHandler.instance.scheduleRecurringNotification(
+  id: 2001,
+  title: 'Daily check-in',
+  body: 'How are you feeling today?',
+  repeatInterval: 'daily',
+  hour: 9,
+  minute: 0,
+);
+
+await FirebaseMessagingHandler.instance.scheduleWeeklyNotification(
+  id: 2002,
+  title: 'Weekly summary',
+  body: 'Your summary is ready.',
+  weekday: DateTime.monday,
+  hour: 8,
+  minute: 30,
+);
+```
+
+Inspect and cancel pending work:
+
+```dart
+final pending =
+    await FirebaseMessagingHandler.instance.getPendingNotifications();
+
+await FirebaseMessagingHandler.instance.cancelScheduledNotification(1001);
+await FirebaseMessagingHandler.instance.cancelAllScheduledNotifications();
+```
+
+Refresh the package timezone after the app resumes if users may travel or
+change the system timezone:
 
 ```dart
 await FirebaseMessagingHandler.instance.refreshLocalTimezone();
 ```
 
-```dart
-// Schedule a one-time notification
-await FirebaseMessagingHandler.instance.scheduleNotification(
-  id: 1,
-  title: 'Meeting Reminder',
-  body: 'Team meeting in 30 minutes',
-  scheduledDate: DateTime.now().add(Duration(minutes: 30)),
-);
+Local scheduling support is platform-dependent. Web does not provide durable
+package scheduling, and desktop support follows the capabilities reported by
+the underlying platform implementation.
 
-// Schedule a recurring notification
-await FirebaseMessagingHandler.instance.scheduleRecurringNotification(
-  id: 2,
-  title: 'Daily Reminder',
-  body: 'Don\'t forget to check your tasks',
-  repeatInterval: 'daily',
-  hour: 9,
-  minute: 0,
-);
-```
+## Groups, threads, badges, and sounds
 
-### Badge Management
+### Android groups
 
 ```dart
-// Set badge count
-await FirebaseMessagingHandler.instance.setIOSBadgeCount(5);
-await FirebaseMessagingHandler.instance.setAndroidBadgeCount(3);
-
-// Get badge count
-final int iosBadge = await FirebaseMessagingHandler.instance.getIOSBadgeCount();
-final int androidBadge = await FirebaseMessagingHandler.instance.getAndroidBadgeCount();
-
-// Clear badge count
-await FirebaseMessagingHandler.instance.clearBadgeCount();
-```
-
-### Notification Grouping
-
-```dart
-// Show grouped notifications
 await FirebaseMessagingHandler.instance.showGroupedNotification(
-  title: 'New Messages',
-  body: 'You have 3 new messages',
-  groupKey: 'messages',
-  groupTitle: 'Messages',
+  title: 'Build finished',
+  body: 'Android release build completed.',
+  groupKey: 'builds',
+  groupTitle: 'Build activity',
+  channelId: 'general',
+);
+
+await FirebaseMessagingHandler.instance.showGroupedNotification(
+  title: '2 build updates',
+  body: 'Open to see recent build activity.',
+  groupKey: 'builds',
+  groupTitle: 'Build activity',
+  channelId: 'general',
   isSummary: true,
 );
-
-// Create notification group
-await FirebaseMessagingHandler.instance.createNotificationGroup(
-  groupKey: 'messages',
-  groupTitle: 'Messages',
-  notifications: [
-    NotificationData(
-      title: 'Message 1',
-      body: 'Hello from John',
-      payload: {'message_id': '1'},
-    ),
-    NotificationData(
-      title: 'Message 2',
-      body: 'Hello from Jane',
-      payload: {'message_id': '2'},
-    ),
-  ],
-);
 ```
 
-### Custom Sounds
+`createNotificationGroup` can build a group from multiple
+`NotificationData` values. Use `dismissNotificationGroup` to remove the
+package-managed group where the platform supports it.
+
+### Apple threads
 
 ```dart
-// Create custom sound channel
-await FirebaseMessagingHandler.instance.createCustomSoundChannel(
-  channelId: 'custom_sound',
-  channelName: 'Custom Sound Notifications',
-  channelDescription: 'Notifications with custom sounds',
-  soundFileName: 'custom_sound.mp3',
-  importance: NotificationImportanceEnum.high,
-  priority: NotificationPriorityEnum.high,
-);
-
-// Show notification with custom sound
-await FirebaseMessagingHandler.instance.showNotificationWithCustomSound(
-  title: 'Custom Sound Notification',
-  body: 'This notification has a custom sound',
-  soundFileName: 'custom_sound.mp3',
-);
-```
-
-### Analytics Integration
-
-```dart
-// Set up analytics callback
-FirebaseMessagingHandler.instance.setAnalyticsCallback((event, data) {
-  print('Analytics Event: $event');
-  print('Event Data: $data');
-  
-  // Send to your analytics service
-  // FirebaseAnalytics.instance.logEvent(name: event, parameters: data);
-});
-
-// Track custom events
-FirebaseMessagingHandler.instance.trackAnalyticsEvent('custom_event', {
-  'user_id': '123',
-  'action': 'notification_clicked',
-});
-```
-
-## Advanced Features
-
-### Notification Actions
-
-Create interactive notifications with custom action buttons:
-
-```dart
-NotificationAction(
-  id: 'reply',
-  title: 'Reply',
-  destructive: false,
-  payload: {
-    'action': 'reply',
-    'user_id': '123',
-    'thread_id': '456',
-  },
-)
-```
-
-### Scheduling Options
-
-Schedule notifications with various options:
-
-```dart
-// One-time notification
-await FirebaseMessagingHandler.instance.scheduleNotification(
-  id: 1,
-  title: 'One-time Notification',
-  body: 'This will show once',
-  scheduledDate: DateTime.now().add(Duration(hours: 1)),
-  allowWhileIdle: true,
-);
-
-// Recurring notification
-await FirebaseMessagingHandler.instance.scheduleRecurringNotification(
-  id: 2,
-  title: 'Daily Reminder',
-  body: 'Daily task reminder',
-  repeatInterval: 'daily',
-  hour: 9,
-  minute: 0,
-);
-```
-
-### Badge Management
-
-Cross-platform badge count management:
-
-```dart
-// iOS badge management
-await FirebaseMessagingHandler.instance.setIOSBadgeCount(5);
-final int iosBadge = await FirebaseMessagingHandler.instance.getIOSBadgeCount();
-
-// Android badge management
-await FirebaseMessagingHandler.instance.setAndroidBadgeCount(3);
-final int androidBadge = await FirebaseMessagingHandler.instance.getAndroidBadgeCount();
-
-// Clear all badges
-await FirebaseMessagingHandler.instance.clearBadgeCount();
-```
-
-### Notification Grouping
-
-Organize notifications into groups:
-
-```dart
-// Android notification groups
-await FirebaseMessagingHandler.instance.showGroupedNotification(
-  title: 'Group Summary',
-  body: '3 new notifications',
-  groupKey: 'messages',
-  groupTitle: 'Messages',
-  isSummary: true,
-);
-
-// iOS conversation threads
 await FirebaseMessagingHandler.instance.showThreadedNotification(
-  title: 'New Message',
-  body: 'Hello from John',
-  threadIdentifier: 'conversation_123',
+  title: 'Mina',
+  body: 'I added the final screenshots.',
+  threadIdentifier: 'conversation-123',
+  payload: const {'route': '/messages/123'},
 );
 ```
 
-### Custom Sound Support
+### Badges
 
-Platform-specific sound customization:
+Direct app-icon badge mutation is currently implemented by the package’s iOS
+bridge:
 
 ```dart
-// Create custom sound channel
+await FirebaseMessagingHandler.instance.setIOSBadgeCount(5);
+final count = await FirebaseMessagingHandler.instance.getIOSBadgeCount();
+await FirebaseMessagingHandler.instance.clearBadgeCount();
+```
+
+Android launchers own badge behavior and do not expose one consistent direct
+mutation API. The retained Android badge methods return no useful value unless
+the runtime reports support. Query capabilities before showing a badge
+control.
+
+### Custom sounds
+
+Create an Android channel with a raw resource sound:
+
+```dart
 await FirebaseMessagingHandler.instance.createCustomSoundChannel(
-  channelId: 'custom_sound',
-  channelName: 'Custom Sound Notifications',
-  channelDescription: 'Notifications with custom sounds',
-  soundFileName: 'custom_sound.mp3',
-  importance: NotificationImportanceEnum.high,
-  priority: NotificationPriorityEnum.high,
-  enableVibration: true,
-  enableLights: true,
-);
-
-// Get available sounds (iOS)
-final List<String>? sounds = await FirebaseMessagingHandler.instance.getAvailableSounds();
-```
-
-## In-App Messaging
-
-Deliver rich in-app experiences using silent/data-only FCM payloads that map to reusable templates.
-
-### Register Templates
-
-```dart
-FirebaseMessagingHandler.instance.registerInAppNotificationTemplates({
-  'promo_banner': InAppNotificationTemplate(
-    id: 'promo_banner',
-    description: 'Lightweight promotional banner',
-    onDisplay: (inAppData) {
-      inAppOverlayController.showBanner(
-        title: inAppData.content['title'] as String?,
-        body: inAppData.content['body'] as String?,
-        imageUrl: inAppData.content['image'] as String?,
-        ctaLabel: inAppData.content['cta_label'] as String?,
-        deeplink: inAppData.content['deeplink'] as String?,
-      );
-    },
-  ),
-});
-
-FirebaseMessagingHandler.instance.setInAppFallbackDisplayHandler((payload) {
-  debugPrint('Unhandled in-app template: ${payload.templateId}');
-});
-```
-
-### Listen for Ready Messages
-
-```dart
-FirebaseMessagingHandler.instance
-    .getInAppNotificationStream()
-    .listen((inAppData) {
-  inAppLogger.debug('Render template ${inAppData.templateId}');
-  campaignAnalytics.track('in_app_impression', inAppData.analytics);
-});
-```
-
-Need to hydrate pending payloads after a cold start? Call:
-
-```dart
-await FirebaseMessagingHandler.instance.flushPendingInAppNotifications();
-```
-
-### Sample FCM Payload
-
-```json
-{
-  "message": {
-    "token": "{{deviceToken}}",
-    "data": {
-      "fcmh_inapp": "{ \"id\": \"winter_sale_2025\", \"templateId\": \"promo_banner\", \"trigger\": \"immediate\", \"content\": { \"title\": \"Winter Sale\", \"body\": \"Take 25% off today only\", \"cta_label\": \"Shop now\", \"deeplink\": \"app://store/sale\" }, \"analytics\": { \"campaignId\": \"winter_flash\", \"variant\": \"A\" } }"
-    }
-  }
-}
-```
-
-Supported triggers:
-
-- `immediate` → render as soon as the payload arrives (foreground or via queued stream)
-- `next_foreground` → store until the next time you listen to the stream
-- `app_launch` → store until `flushPendingInAppNotifications` is called
-- `custom` → surface the payload immediately and let the host decide when to display
-
-Use `clearPendingInAppNotifications()` to drop queued payloads (optionally targeting a specific `id`).
-
-### Built-in Templates & Overlay Support
-
-**Good fits for in-app templates:**
-- **Feature announcements** - Introduce new capabilities
-- **User onboarding** - Guide users through app features  
-- **Feedback collection** - Gather user ratings and suggestions
-- **Promotional content** - Showcase offers and campaigns
-- **Educational content** - Tips, tutorials, and help
-- **User engagement** - Surveys, polls, and interactive content
-- **Quick notifications** - Snackbars for non-intrusive messages
-
-**Avoid in-app templates for critical updates:**
-- **App updates** - Use system-level update prompts instead
-- **Security alerts** - Use push notifications for immediate attention
-- **Payment confirmations** - Use dedicated UI flows
-- **Emergency notifications** - Use push notifications for reliability
-
-**Template flexibility:**
-The built-in templates are examples. You can:
-- **Register custom templates** with your own layouts and animations
-- **Create any UI component** - modals, sheets, cards, overlays, etc.
-- **Define custom interactions** - gestures, animations, transitions
-- **Build brand-specific experiences** - match your app's design system
-- **Implement complex workflows** - multi-step processes, wizards, etc.
-
-The plugin handles overlay management, navigation hooks, and analytics callbacks while your app owns the actual UI.
-
-Provide a navigator key so the handler can present rich layouts:
-
-```dart
-final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
-
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  FirebaseMessagingHandler.instance.setInAppNavigatorKey(rootNavigatorKey);
-  runApp(MaterialApp(
-    navigatorKey: rootNavigatorKey,
-    home: const ShowcaseHome(),
-  ));
-}
-```
-
-Register the generic template and handle button callbacks:
-
-```dart
-void _registerTemplates() {
-  FirebaseMessagingHandler.instance.registerInAppNotificationTemplates({
-    'builtin_generic': BuiltInInAppTemplates.generic(
-      onAction: (actionId, data) {
-        debugPrint('Template action: $actionId payload=${data.payload}');
-      },
-    ),
-  });
-}
-```
-
-Trigger locally (useful for testing) or remotely via a silent FCM payload:
-
-```dart
-InAppMessageManager.instance.triggerInAppNotification(
-  InAppNotificationData(
-    id: 'demo_${DateTime.now().millisecondsSinceEpoch}',
-    templateId: 'builtin_generic',
-    triggerType: InAppTriggerTypeEnum.immediate,
-    content: {
-      'layout': 'dialog',
-      'title': 'New Feature Available',
-      'subtitle': 'Enhanced notification controls',
-      'body': 'We\'ve added smart scheduling and quiet hours. Try them out!',
-      'imageUrl': 'https://via.placeholder.com/600x320/059669/ffffff?text=New+Feature',
-      'blurSigma': 16,
-      'cornerRadius': 20,
-      'buttons': [
-        {'id': 'try_now', 'label': 'Try Now', 'style': 'filled'},
-        {'id': 'learn_more', 'label': 'Learn More', 'style': 'outlined'},
-        {'id': 'dismiss', 'label': 'Not now', 'style': 'text', 'dismissOnly': true}
-      ],
-    },
-    analytics: {'source': 'docs_demo'},
-    rawPayload: const {},
-    receivedAt: DateTime.now(),
-  ),
+  channelId: 'urgent',
+  channelName: 'Urgent alerts',
+  channelDescription: 'Alerts that require prompt attention',
+  soundFileName: 'urgent_alert',
+  importance: NotificationImportanceEnum.max,
+  priority: NotificationPriorityEnum.max,
 );
 ```
 
-Supported layouts include `dialog`, `full_screen`, `bottom_sheet`, `banner`, `tooltip`, `carousel`, and `snackbar`. Configure blur, barrier color, size factors, button styles, and HTML content directly from the payload.
+Place Android audio under `android/app/src/main/res/raw/` and refer to it
+without the extension. Add Apple sounds to the app target and use the complete
+resource name. Sound choices are affected by user settings, Focus/Do Not
+Disturb, and the immutable behavior of existing Android channels.
 
-Key payload fields:
+## Foreground presentation
 
-- `layout`: dialog | full_screen | bottom_sheet | banner | snackbar
-- `widthFactor` / `heightFactor`: fractions of the screen size (dialog + full screen)
-- `blurSigma` & `barrierColor`: backdrop styling for dialogs/full screens
-- `backgroundColor` / `textColor`: hex (`#RRGGBB` or `#AARRGGBB`) or RGB maps
-- `html`: optional HTML body rendered with `flutter_widget_from_html_core`
-- `buttons`: array of `{ id, label, style (filled|outlined|text|link), dismissOnly }`
-- `autoDismissSeconds`: auto-dismiss duration for banners/snackbars
-- `position`: `top` or `bottom` for banner layout
-- `pages`: list of page maps (carousel) each supporting `title`, `body`, `html`, `imageUrl`, and `buttons`
-
-### Custom Template Registration
-
-Create your own templates with complete control over UI and behavior:
-
-```dart
-// Register a custom template
-FirebaseMessagingHandler.instance.registerInAppNotificationTemplates({
-  'my_custom_template': InAppNotificationTemplate(
-    id: 'my_custom_template',
-    description: 'Custom onboarding flow',
-    autoDismissDuration: null, // Manual dismiss
-    onDisplay: (data) {
-      // Your custom UI logic here
-      showDialog(
-        context: context,
-        builder: (context) => MyCustomOnboardingDialog(
-          title: data.content['title'],
-          steps: data.content['steps'],
-          onComplete: () => data.onAction?.call('completed', data),
-        ),
-      );
-    },
-  ),
-  
-  'my_animated_banner': InAppNotificationTemplate(
-    id: 'my_animated_banner',
-    description: 'Animated promotional banner',
-    autoDismissDuration: const Duration(seconds: 5),
-    onDisplay: (data) {
-      // Custom animated banner with your branding
-      showAnimatedBanner(
-        message: data.content['message'],
-        backgroundColor: data.content['color'],
-        animation: SlideAnimation.fromTop(),
-      );
-    },
-  ),
-});
-```
-
-**Custom Template Benefits:**
-- **Complete UI control** - Use any Flutter widget
-- **Brand consistency** - Match your app's design system
-- **Advanced animations** - Custom transitions and effects
-- **Complex interactions** - Multi-step flows, gestures, etc.
-- **Platform-specific behavior** - Different UIs per platform
-- **Integration flexibility** - Connect to your existing components
-
-## Foreground Notification Customization
-
-Own the fallback notification UI that appears while your app is active. The plugin includes smart fallback logic to ensure notifications always display, even when no channel ID is provided.
-
-### Smart Channel Fallback
-
-The plugin automatically handles Android notification channels with intelligent fallback:
-
-- **Channel Specified**: If a notification includes a channel ID, that specific channel is used
-- **Channel Not Found**: If the specified channel doesn't exist, falls back to the first available channel
-- **No Channel Provided**: If no channel ID is specified, uses the first available channel
-- **No Channels Available**: Logs an error and skips the notification (prevents crashes)
-
-This ensures your Android foreground notifications always display, regardless of Firebase Console configuration.
-
-### Override Once, Anywhere
+When a remote message arrives while the app is active, the package can create a
+local presentation. Override the defaults globally or per message:
 
 ```dart
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -1042,74 +809,19 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 FirebaseMessagingHandler.instance.setForegroundNotificationOptions(
   ForegroundNotificationOptions(
     androidBuilder: (context) {
-      final imageAsset = context.data['image_asset'] as String?;
-      if (imageAsset != null) {
-        return AndroidNotificationDetails(
-          'promo_channel',
-          'Promotions',
-          channelDescription: 'Foreground promos',
-          importance: Importance.max,
-          priority: Priority.high,
-          styleInformation: BigPictureStyleInformation(
-            DrawableResourceAndroidBitmap(imageAsset),
-            largeIcon: DrawableResourceAndroidBitmap(imageAsset),
-          ),
-        );
-      }
-      return const AndroidNotificationDetails(
-        'default_channel',
-        'Default Notifications',
-        importance: Importance.max,
+      final image = context.data['imageUrl'] as String?;
+
+      return AndroidNotificationDetails(
+        'general',
+        'General',
+        channelDescription: 'General app notifications',
+        importance: Importance.high,
         priority: Priority.high,
+        styleInformation: image == null
+            ? null
+            : BigTextStyleInformation(context.body ?? ''),
       );
     },
-    iosBuilder: (context) {
-      final imageName = context.data['image_asset'] as String?;
-      if (imageName == null) {
-        return const DarwinNotificationDetails(
-          presentAlert: true,
-          presentSound: true,
-          presentBadge: true,
-        );
-      }
-
-      return DarwinNotificationDetails(
-        presentAlert: true,
-        presentSound: true,
-        presentBadge: true,
-        attachments: [
-          DarwinNotificationAttachment('resource:///$imageName'),
-        ],
-      );
-    },
-  ),
-);
-```
-
-The builders receive the real `RemoteMessage`, so you can map any data payload to advanced styles, media, icons, or badges. Return `null` to fall back to the plugin defaults, or set `enabled: false` to suppress the automatic notification entirely when you prefer a custom in-app surface.
-
-Prefer static overrides? Use `androidDefaults` / `iosDefaults` to plug in prebuilt `AndroidNotificationDetails` or `DarwinNotificationDetails` instances without writing builders.
-
-### Configure Default Custom Sounds
-
-Set custom sounds once—they'll apply to all foreground notifications automatically:
-
-```dart
-// Step 1: Configure default sounds for foreground notifications
-FirebaseMessagingHandler.instance.setForegroundNotificationOptions(
-  ForegroundNotificationOptions(
-    // Android: Place sound file in android/app/src/main/res/raw/custom_sound.mp3
-    androidSoundFileName: 'custom_sound', // Without extension
-    
-    // iOS: Place sound file in project (Runner/Sounds/custom_sound.aiff)
-    iosSoundFileName: 'custom_sound.aiff', // With extension
-    
-    androidDefaults: const AndroidNotificationDetails(
-      'default_channel',
-      'Default Notifications',
-      importance: Importance.max,
-      priority: Priority.high,
-    ),
     iosDefaults: const DarwinNotificationDetails(
       presentAlert: true,
       presentSound: true,
@@ -1119,346 +831,362 @@ FirebaseMessagingHandler.instance.setForegroundNotificationOptions(
 );
 ```
 
-**Platform-Specific Sound Configuration:**
+Set `enabled: false` when the app should consume foreground messages without
+automatic local presentation.
 
-**Android (Two Options):**
+## In-app messages
 
-**Option 1:** Default sound for all foreground notifications (shown above)
+An in-app message is carried in an FCM data value named `fcmh_inapp` (the
+legacy `in_app_payload` name is also accepted). The value must be a JSON
+string, because FCM HTTP v1 data values are strings.
+
+Start by giving the presenter a navigator key and registering a template:
+
 ```dart
-ForegroundNotificationOptions(
-  androidSoundFileName: 'custom_sound', // Applied to all foreground notifications
-)
+final navigatorKey = GlobalKey<NavigatorState>();
+
+FirebaseMessagingHandler.instance.setInAppNavigatorKey(navigatorKey);
+
+FirebaseMessagingHandler.instance.registerInAppNotificationTemplates({
+  'builtin_generic': BuiltInInAppTemplates.generic(
+    onAction: (actionId, data) {
+      debugPrint('In-app action $actionId for message ${data.id}');
+    },
+  ),
+});
 ```
 
-**Option 2:** Per-channel sounds (configured during init)
+Use the same key in your application:
+
 ```dart
-await FirebaseMessagingHandler.instance.init(
-  senderId: 'your_sender_id',
-  androidChannelList: [
-    NotificationChannelData(
-      id: 'default_channel',
-      name: 'Default Notifications',
-      soundFileName: 'default_sound', // Sound for this channel only
-    ),
-    NotificationChannelData(
-      id: 'urgent_channel',
-      name: 'Urgent Alerts',
-      soundFileName: 'urgent_sound', // Different sound for urgent channel
-    ),
-  ],
-  androidNotificationIconPath: '@drawable/ic_notification',
+MaterialApp(
+  navigatorKey: navigatorKey,
+  home: const HomeScreen(),
 );
 ```
 
-**iOS:**
+The built-in generic template reads its layout and content from the payload. It
+supports dialog, full-screen, banner, bottom sheet, snackbar, and carousel
+presentation, with configurable text, HTML, images, colors, buttons, and
+auto-dismiss behavior.
 
-iOS doesn't have channels, so configure the default sound through `ForegroundNotificationOptions`:
+You can observe every ready in-app message independently of rendering:
+
 ```dart
-ForegroundNotificationOptions(
-  iosSoundFileName: 'custom_sound.aiff', // Applied to ALL iOS notifications
-)
+final subscription = FirebaseMessagingHandler.instance
+    .getInAppNotificationStream()
+    .listen((data) {
+      debugPrint('Template: ${data.templateId}');
+      debugPrint('Content: ${data.content}');
+    });
 ```
 
-**Important iOS limitation:**
+For an app-owned layout, register a custom template:
 
-**Foreground Notifications (App Active):**
-- **Custom sounds work** - via `ForegroundNotificationOptions.iosSoundFileName`
-- **Plugin-rendered notifications** - foreground notifications are handled by the plugin
+```dart
+FirebaseMessagingHandler.instance.registerInAppNotificationTemplates({
+  'trial_ending': InAppNotificationTemplate(
+    id: 'trial_ending',
+    description: 'Shown shortly before a trial expires',
+    barrierDismissible: true,
+    onDisplay: (data) async {
+      final daysLeft = data.content['daysLeft'];
+      final planName = data.content['planName'];
 
-**Background Notifications (App Killed/Backgrounded):**
-- **Plugin defaults are not used** - iOS handles these directly
-- **Payload-driven sound** - iOS uses the APNs/FCM payload and bundled sound resources
+      await InAppTemplatePresenter.instance.showBottomSheet<void>(
+        builder: (context) {
+          return TrialEndingSheet(
+            planName: planName?.toString() ?? '',
+            daysLeft: int.tryParse(daysLeft?.toString() ?? '') ?? 0,
+            rawPayload: data.rawPayload,
+          );
+        },
+      );
+    },
+  ),
+});
+```
 
-**Background sound setup:**
+`InAppNotificationData` exposes:
 
-For background notifications, configure the sound in your **Firebase Console payload**:
+- `id` and `templateId`;
+- `triggerType`;
+- decoded `content`;
+- analytics metadata;
+- the original decoded payload in `rawPayload`;
+- `receivedAt`.
 
-```json
-{
-  "notification": {
-    "title": "Background Notification",
-    "body": "This will use system default sound",
-    "sound": "custom_sound.aiff"  // iOS will use this if file exists in app bundle
-  },
-  "apns": {
-    "payload": {
-      "aps": {
-        "sound": "custom_sound.aiff"  // Alternative APNs-specific sound
+Messages with `nextForeground` or `appLaunch` triggers are persisted until
+they can be delivered. You can manage that queue explicitly:
+
+```dart
+await FirebaseMessagingHandler.instance.flushPendingInAppNotifications();
+await FirebaseMessagingHandler.instance
+    .clearPendingInAppNotifications(id: 'campaign-42');
+```
+
+Use `setInAppFallbackDisplayHandler` if the backend may send template IDs that
+are not registered by this app version.
+
+## Preferences and delivery policy
+
+Categories give users understandable controls instead of one all-or-nothing
+switch. Define them in `FCMConfiguration.notificationCategories`, then embed
+the ready-made preference screen:
+
+```dart
+class NotificationSettingsScreen extends StatelessWidget {
+  const NotificationSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Notifications')),
+      body: NotificationPreferenceCenter(
+        controller:
+            FirebaseMessagingHandler.instance.notificationPreferences,
+      ),
+    );
+  }
+}
+```
+
+The controller persists:
+
+- a global package-managed notification switch;
+- per-category delivery;
+- per-category sound;
+- per-category badge updates;
+- user-selected quiet hours.
+
+You can build your own UI against the same controller:
+
+```dart
+final preferences =
+    FirebaseMessagingHandler.instance.notificationPreferences;
+
+await preferences.setCategoryEnabled('product_updates', false);
+await preferences.setCategorySoundEnabled('messages', true);
+await preferences.setQuietHours(
+  const NotificationQuietHours(startHour: 23, endHour: 7),
+);
+```
+
+The shared `NotificationDeliveryPolicy` adds app defaults and frequency
+limits:
+
+```dart
+const policy = NotificationDeliveryPolicy(
+  quietHours: NotificationQuietHours(
+    startHour: 22,
+    startMinute: 30,
+    endHour: 7,
+  ),
+  globalInterval: Duration(seconds: 30),
+  perCategoryInterval: Duration(minutes: 5),
+  globalDailyCap: 30,
+  perCategoryDailyCap: 8,
+);
+```
+
+The policy is applied to package-managed push, local, in-app, and inbox
+surfaces. A user’s saved quiet hours override the app default. Delivery
+decisions are restored from durable state so deduplication and caps are not
+reset every time the process restarts.
+
+There is one important boundary: a system-presented FCM/APNs notification is
+already visible before Dart can apply client policy. Use client presentation
+when pre-display suppression is a hard requirement, and accept the
+background-delivery tradeoff described earlier.
+
+For different persistence or encrypted storage, implement
+`NotificationPreferencesRepository` and/or `NotificationStateStore` and pass
+them in `FCMConfiguration`.
+
+## Inbox
+
+When `saveNotificationsToStorage` is enabled (the default), package-managed
+notifications can be retained in a local inbox. The default store uses
+`SharedPreferences` and keeps up to `maxStoredNotifications` entries.
+
+Add the ready-made view:
+
+```dart
+class InboxScreen extends StatelessWidget {
+  InboxScreen({super.key});
+
+  final InboxStorageService storage = InboxStorageService(maxItems: 100);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Inbox')),
+      body: NotificationInboxView(
+        storage: storage,
+        pageSize: 20,
+        onItemTap: (item) {
+          final route = item.data['route'];
+          if (route is String) {
+            Navigator.of(context).pushNamed(route);
+          }
+        },
+        onActionTap: (actionId, item) {
+          debugPrint('Inbox action $actionId for ${item.id}');
+        },
+      ),
+    );
+  }
+}
+```
+
+`NotificationInboxView` includes paging, pull-to-refresh, mark-as-read, action
+chips, optional swipe-to-delete, and theming hooks. For a database or synced
+inbox, implement `NotificationInboxStorageInterface`.
+
+The built-in storage API can also be used directly:
+
+```dart
+final storage = InboxStorageService();
+final unread = await storage.count(unreadOnly: true);
+final firstPage = await storage.fetch(page: 0, pageSize: 20);
+await storage.markRead(['message-123']);
+```
+
+## Delivery events and analytics
+
+`deliveryEvents` is the operational stream. It reports when a message is:
+
+- received, delivered, or scheduled;
+- suppressed or deferred;
+- opened, dismissed, or acted on;
+- expired or deduplicated;
+- cancelled or processed as a non-display command;
+- failed.
+
+```dart
+final eventSubscription =
+    FirebaseMessagingHandler.instance.deliveryEvents.listen((event) {
+      debugPrint(
+        '${event.type.name} ${event.surface.name} '
+        'message=${event.messageId} reason=${event.reason}',
+      );
+
+      if (event.type == NotificationDeliveryEventType.actionSelected) {
+        handleAction(
+          event.actionId,
+          input: event.actionInput,
+          data: event.data,
+        );
       }
-    }
-  }
-}
+    });
 ```
 
-**Requirements for Background Sounds:**
-1. Sound file must be in your iOS app bundle (added via Xcode)
-2. Sound file must be ≤ 30 seconds
-3. Supported formats: AIFF, CAF, WAV
-4. If file doesn't exist, iOS falls back to default sound
-
-**Sound File Setup:**
-
-**Android:**
-1. Place sound file in `android/app/src/main/res/raw/`
-2. Use filename **without** extension (e.g., `custom_sound` for `custom_sound.mp3`)
-3. Supported formats: MP3, OGG
-
-**iOS:**
-1. Add sound file to Xcode project (via Xcode > Add Files)
-2. Ensure it's added to the target (check "Copy items if needed")
-3. Use filename **with** extension (e.g., `custom_sound.aiff`)
-4. Supported formats: AIFF, CAF, WAV (up to 30 seconds)
-
-> **Tip:**
-> - **Android**: Use `NotificationChannelData.soundFileName` for per-channel sounds, or `ForegroundNotificationOptions.androidSoundFileName` for all foreground notifications.
-> - **iOS**: Use `ForegroundNotificationOptions.iosSoundFileName` for plugin-rendered foreground notifications. For background notifications, set the sound in the APNs/FCM payload.
-
-> Use `DrawableResourceAndroidBitmap`, `ByteArrayAndroidBitmap`, or `FilePathAndroidBitmap` depending on where your assets live. For iOS, `DarwinNotificationAttachment` expects a local resource URI, so download remote media before attaching it.
-
-## Analytics Integration
-
-### Built-in Event Tracking
-
-The plugin automatically tracks these events:
-
-- `notification_received` - When notifications arrive
-- `notification_clicked` - When notifications are tapped
-- `notification_action` - When action buttons are pressed
-- `notification_scheduled` - When notifications are scheduled
-- `fcm_token` - Token events (fetched, updated, error)
-
-### Custom Analytics
+The older analytics callback remains useful when integrating a generic
+analytics provider:
 
 ```dart
-// Set up analytics callback
-FirebaseMessagingHandler.instance.setAnalyticsCallback((event, data) {
-  // Send to your analytics service
-  FirebaseAnalytics.instance.logEvent(
-    name: event,
-    parameters: data,
-  );
-});
-
-// Track custom events
-FirebaseMessagingHandler.instance.trackAnalyticsEvent('custom_event', {
-  'user_id': '123',
-  'action': 'notification_clicked',
-  'timestamp': DateTime.now().toIso8601String(),
-});
-```
-
-## Notification Diagnostics
-
-Stay ahead of production issues with a built-in "notification doctor". It inspects permissions, token state, badge capabilities, web support, and background wiring in one call.
-
-### Run the Doctor
-
-```dart
-final diagnostics = await FirebaseMessagingHandler.instance.runDiagnostics();
-
-debugPrint('Notification diagnostics: ${diagnostics.toMap()}');
-
-if (!diagnostics.success || diagnostics.recommendations.isNotEmpty) {
-  for (final recommendation in diagnostics.recommendations) {
-    debugPrint('Recommendation → $recommendation');
-  }
-}
-```
-
-**What you get:**
-
-- `permissionsGranted` and `authorizationStatus` – current notification permission state.
-- `fcmTokenAvailable` – whether a token is cached via `updateTokenCallback`.
-- `badgeSupported` – launcher/platform badge capability (best-effort on Android).
-- `webNotificationsAllowed` / `metadata['webPermission']` – browser permission string.
-- `metadata['webDiagnostics']` – notification API availability, secure-context status, and service-worker/controller checks on web.
-- `metadata['fcmSupported']` / `metadata['fcmUnsupportedReason']` – whether Firebase Messaging is available on the current platform, including desktop local-mode fallback on Windows/Linux.
-- `metadata['backgroundHandlerRegistered']` – confirms `configureBackgroundMessageHandler` has been invoked.
-- `pendingNotificationCount` – number of locally scheduled notifications.
-- `metadata['invalidPayloadCount']` – how many malformed data-only payloads were rejected by the bridge/schema guard.
-
-### Background Message Helper
-
-Register a top-level handler once and reuse the plugin’s pipeline inside the isolate:
-
-```dart
-@pragma('vm:entry-point')
-Future<void> myBackgroundHandler(RemoteMessage message) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await FirebaseMessagingHandler.handleBackgroundMessage(message);
-
-  // Custom logic: update analytics, hydrate local cache, etc.
-}
-
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await FirebaseMessagingHandler.instance.configureBackgroundMessageHandler(
-    myBackgroundHandler,
-  );
-
-  runApp(const MyApp());
-}
-```
-
-> **Tip:** Prefer the built-in `firebaseMessagingHandlerBackgroundDispatcher` if you simply want to hydrate the plugin without extra logic:
->
-> ```dart
-> await FirebaseMessagingHandler.instance.configureBackgroundMessageHandler(
->   firebaseMessagingHandlerBackgroundDispatcher,
-> );
-> ```
-
-### Web Safeguards
-
-Scheduling, interactive actions, and app-icon badges are not available in browsers. The doctor highlights these limitations and the runtime API logs “ignored” warnings so you can branch logic per platform.
-
-## Quiet Hours & Throttling
-
-Control when in-app messages surface and how frequently campaigns fire.
-
-```dart
-await FirebaseMessagingHandler.instance.setInAppDeliveryPolicy(
-  const InAppDeliveryPolicy(
-    globalInterval: Duration(seconds: 30),
-    perTemplateInterval: Duration(minutes: 2),
-    perTemplateDailyCap: 5,
-    quietHours: InAppQuietHours(startHour: 22, endHour: 7),
+await FirebaseMessagingHandler.instance.initialize(
+  FCMConfiguration(
+    analyticsOptions: const NotificationAnalyticsOptions(
+      privacy: NotificationAnalyticsPrivacy.metadataOnly,
+    ),
+    analyticsCallback: (event, data) {
+      analytics.track(event, properties: data);
+    },
   ),
 );
 ```
 
-- `globalInterval` enforces a cool-down between any two in-app presentations.
-- `perTemplateInterval` keeps the same template from spamming the timeline.
-- `perTemplateDailyCap` limits impressions per template per day.
-- `quietHours` defers delivery until the configured window closes. Deferred payloads are re-queued automatically with the diagnostics report showing their status.
+`metadataOnly` is the default and avoids exporting notification content.
+Choose `fullPayload` only when you have a clear consent and data-governance
+reason. Choose `disabled` to suppress package analytics callbacks.
 
-## Data-Only Bridging
+Delivery events describe what the client pipeline observed. They are not a
+guarantee that a person saw or read a notification.
 
-Promote silent payloads into local notifications (or custom flows) so users still see timely updates.
+## Payloads and server sending
+
+### The string-only FCM rule
+
+Every value in FCM HTTP v1 `message.data` must be a string. Encode lists,
+objects, booleans, and numbers as JSON strings. The v2 envelope helpers do this
+for you and reject data payloads larger than 4096 bytes.
 
 ```dart
-// Promote data-only FCM payloads to local notifications automatically
-FirebaseMessagingHandler.instance.enableDefaultDataOnlyBridge(
-  channelId: 'actions_channel',
-  titleKey: 'title',
-  bodyKey: 'body',
-);
-
-// Or wire your own handler and decide when work is complete
-await FirebaseMessagingHandler.instance.configureBackgroundProcessingCallback(
-  (RemoteMessage message) async {
-    if (message.data['should_defer'] == 'true') {
-      return false; // enqueue for retry when app wakes up
-    }
-
-    // Custom processing…
-    return true;
+final envelope = NotificationEnvelope(
+  id: 'order-7821-shipped',
+  idempotencyKey: 'order-7821-shipped-v1',
+  title: 'Order shipped',
+  body: 'Order #7821 is on the way.',
+  category: 'orders',
+  route: '/orders/7821',
+  channelId: 'general',
+  timeToLive: const Duration(days: 2),
+  sentAt: DateTime.now().toUtc(),
+  data: const {
+    'orderId': '7821',
+    'carrier': 'Example Express',
   },
 );
+
+final Map<String, String> fcmData = envelope.toFcmData();
 ```
 
-Use `FirebaseMessagingHandler.handleBackgroundMessage(message)` inside your top-level background function to hydrate local queues before running custom logic.
+The same envelope contract is implemented in:
 
-## Testing Utilities
+- [schema/notification-envelope-v2.schema.json](schema/notification-envelope-v2.schema.json)
+- [server/src/envelope.ts](server/src/envelope.ts)
+- the Flutter runtime
+- the web service-worker template
 
-### Mock Data Generation
+Its commands are:
 
-```dart
-// Create mock notification data
-final NotificationData mockData = FirebaseMessagingHandler.createMockNotificationData(
-  title: 'Mock Notification',
-  body: 'This is a mock notification',
-  payload: {'test': 'data'},
-  type: NotificationTypeEnum.foreground,
-);
+| Command | Client behavior |
+| --- | --- |
+| `display` | Present and optionally store a notification |
+| `replace` | Update a stable notification ID/tag |
+| `cancel` | Remove matching package-managed presentation |
+| `markRead` | Mark a matching inbox record as read |
+| `silent` | Process data without system presentation |
 
-// Create mock remote message
-final RemoteMessage mockMessage = FirebaseMessagingHandler.createMockRemoteMessage(
-  title: 'Mock Message',
-  body: 'This is a mock message',
-  data: {'test': 'data'},
-);
-```
+Reliability fields include an idempotency key, dedupe key, TTL, absolute
+expiry, collapse key, priority, and explicit client-vs-system remote
+presentation.
 
-### Test Mode
+### System-presented HTTP v1 example
 
-```dart
-// Enable test mode
-FirebaseMessagingHandler.setTestMode(true);
-
-// Get mock streams
-final Stream<RemoteMessage>? mockNotificationStream = 
-    FirebaseMessagingHandler.getMockNotificationStream();
-
-final Stream<NotificationData>? mockClickStream = 
-    FirebaseMessagingHandler.getMockClickStream();
-
-// Add mock events
-FirebaseMessagingHandler.addMockNotification(mockMessage);
-FirebaseMessagingHandler.addMockClickEvent(mockData);
-
-// Reset mock data
-FirebaseMessagingHandler.resetMockData();
-```
-
-## Payload Cookbook
-
-Jump-start backend integration with ready-to-send payloads:
-
-For full backend examples, see [`server_recipes/`](server_recipes/) with Cloud Functions and FCM HTTP v1 templates.
-
-### Interactive Notification (Actions + Analytics)
+Use this shape when FCM/APNs should display the alert in background and
+terminated states:
 
 ```json
 {
   "message": {
-    "token": "<device-token>",
+    "token": "DEVICE_FCM_TOKEN",
     "notification": {
-      "title": "New Support Ticket",
-      "body": "Tap Reply to follow up without opening the app."
+      "title": "Payment received",
+      "body": "Your receipt is ready."
     },
     "data": {
-      "is_action": true,
-      "action_id": "reply",
-      "action_payload": {"ticket_id": "12345"},
-      "analytics": {"campaign": "support_reengage"}
-    }
-  }
-}
-```
-
-### Data-Only → Local Notification Bridge
-
-```json
-{
-  "message": {
-    "token": "<device-token>",
-    "data": {
-      "title": "Inventory Update",
-      "body": "SKU #48319 is back in stock!",
-      "deep_link": "app://inventory/48319"
-    }
-  }
-}
-```
-
-### In-App Template Trigger
-
-```json
-{
-  "message": {
-    "token": "<device-token>",
-    "data": {
-      "fcmh_inapp": {
-        "id": "promo-2025",
-        "templateId": "builtin_generic",
-        "trigger": "immediate",
-        "content": {
-          "layout": "html_modal",
-          "title": "Spring Launch",
-          "html": "<h2>Fresh features</h2><p>Try quiet hours + notification doctor today.</p>",
-          "buttons": [{"id": "explore", "label": "Explore", "style": "filled"}]
+      "schemaVersion": "2",
+      "id": "receipt-90210",
+      "idempotencyKey": "receipt-90210-v1",
+      "command": "display",
+      "remotePresentation": "system",
+      "category": "billing",
+      "route": "/receipts/90210",
+      "storeInInbox": "true",
+      "data": "{\"receiptId\":\"90210\"}"
+    },
+    "android": {
+      "priority": "high",
+      "notification": {
+        "channel_id": "general"
+      }
+    },
+    "apns": {
+      "payload": {
+        "aps": {
+          "sound": "default"
         }
       }
     }
@@ -1466,397 +1194,384 @@ For full backend examples, see [`server_recipes/`](server_recipes/) with Cloud F
 }
 ```
 
-## API Reference
+### Client-presented data-only example
 
-### Core Methods
+Use this shape when the package should evaluate preferences and policy before
+showing a local notification:
 
-#### Initialization
-```dart
-Future<Stream<NotificationData?>?> init({
-  required String senderId,
-  required List<NotificationChannelData> androidChannelList,
-  required String androidNotificationIconPath,
-  Future<bool> Function(String fcmToken)? updateTokenCallback,
-  bool includeInitialNotificationInStream = true,
-})
-```
-
-#### Initial Notification Handling
-```dart
-Future<NotificationData?> checkInitial() // optional fallback; auto-handled by default
-```
-
-#### Notification Display
-```dart
-Future<void> showNotificationWithActions({
-  required String title,
-  required String body,
-  required List<NotificationAction> actions,
-  Map<String, dynamic>? payload,
-  String? channelId,
-  int? notificationId,
-})
-
-Future<void> showNotificationWithCustomSound({
-  required String title,
-  required String body,
-  required String soundFileName,
-  String? channelId,
-  Map<String, dynamic>? payload,
-  int? notificationId,
-})
-```
-
-#### Scheduling
-```dart
-Future<bool> scheduleNotification({
-  required int id,
-  required String title,
-  required String body,
-  required DateTime scheduledDate,
-  String? channelId,
-  Map<String, dynamic>? payload,
-  List<NotificationAction>? actions,
-  bool allowWhileIdle = false,
-})
-
-Future<bool> scheduleRecurringNotification({
-  required int id,
-  required String title,
-  required String body,
-  required String repeatInterval,
-  required int hour,
-  required int minute,
-  String? channelId,
-  Map<String, dynamic>? payload,
-  List<NotificationAction>? actions,
-})
-```
-
-#### Background Handling & Diagnostics
-```dart
-Future<void> configureBackgroundMessageHandler(
-  Future<void> Function(RemoteMessage message) handler,
-)
-
-static Future<void> handleBackgroundMessage(RemoteMessage message)
-
-Future<NotificationDiagnosticsResult> runDiagnostics()
-
-Future<void> setUnifiedMessageHandler(
-  Future<bool> Function(NormalizedMessage message, NotificationLifecycle lifecycle) handler,
-)
-```
-
-#### Inbox Storage
-
-- `fetch({int page = 0, int pageSize = 20})` →
-  `Future<List<NotificationInboxItem>>`
-- `upsert(NotificationInboxItem item)`
-- `upsertAll(List<NotificationInboxItem> items)`
-- `markRead(List<String> ids, {bool isRead = true})`
-- `delete(List<String> ids)`
-- `clear()`
-- `count({bool unreadOnly = false})`
-
-Implementations:
-
-- `InboxStorageService` – SharedPreferences-backed persistence.
-- `InMemoryInboxStorage` – memory-only, ideal for tests.
-
-#### Badge Management
-```dart
-Future<void> setIOSBadgeCount(int count)
-Future<int> getIOSBadgeCount()
-Future<void> setAndroidBadgeCount(int count)
-Future<int> getAndroidBadgeCount()
-Future<void> clearBadgeCount()
-```
-
-#### Token Management
-```dart
-Future<String?> getFcmToken()
-Future<void> clearToken()
-Future<void> subscribeToTopic(String topic)
-Future<void> unsubscribeFromTopic(String topic)
-Future<void> unsubscribeFromAllTopics()
-```
-
-#### Analytics
-```dart
-void setAnalyticsCallback(Function(String, Map<String, dynamic>) callback)
-void trackAnalyticsEvent(String event, Map<String, dynamic> data)
-```
-
-### Data Models
-
-#### NotificationData
-```dart
-class NotificationData {
-  final Map<String, dynamic> payload;
-  final String? title;
-  final String? body;
-  final String? imageUrl;
-  final String? icon;
-  final String? category;
-  final List<NotificationAction>? actions;
-  final DateTime? timestamp;
-  final NotificationTypeEnum type;
-  final bool isFromTerminated;
-  final String? messageId;
-  final String? senderId;
-  final int? badgeCount;
-}
-```
-
-#### NotificationAction
-```dart
-class NotificationAction {
-  final String id;
-  final String title;
-  final bool destructive;
-  final Map<String, dynamic>? payload;
-}
-```
-
-#### NotificationChannelData
-```dart
-class NotificationChannelData {
-  final String id;
-  final String name;
-  final String? description;
-  final String? groupId;
-  final NotificationImportanceEnum importance;
-  final bool playSound;
-  final String? soundPath;
-  final String? soundFileName;
-  final bool enableVibration;
-  final bool enableLights;
-  final Int64List? vibrationPattern;
-  final Color? ledColor;
-  final bool showBadge;
-  final NotificationPriorityEnum priority;
-  final List<NotificationAction>? actions;
-}
-```
-
-## Configuration
-
-### Notification Channels
-
-Create custom notification channels for different types of notifications:
-
-```dart
-final List<NotificationChannelData> channels = [
-  NotificationChannelData(
-    id: 'default_channel',
-    name: 'Default Notifications',
-    description: 'Default notification channel',
-    importance: NotificationImportanceEnum.high,
-    priority: NotificationPriorityEnum.high,
-    playSound: true,
-    enableVibration: true,
-    enableLights: true,
-  ),
-  NotificationChannelData(
-    id: 'silent_channel',
-    name: 'Silent Notifications',
-    description: 'Silent notification channel',
-    importance: NotificationImportanceEnum.low,
-    priority: NotificationPriorityEnum.low,
-    playSound: false,
-    enableVibration: false,
-    enableLights: false,
-  ),
-];
-```
-
-### Platform-Specific Settings
-
-#### Android
-```dart
-NotificationChannelData(
-  id: 'android_channel',
-  name: 'Android Notifications',
-  description: 'Android-specific notifications',
-  importance: NotificationImportanceEnum.max,
-  priority: NotificationPriorityEnum.max,
-  playSound: true,
-  enableVibration: true,
-  enableLights: true,
-  vibrationPattern: Int64List.fromList([0, 1000, 500, 1000]),
-  ledColor: Color(0xFFFF0000),
-  showBadge: true,
-)
-```
-
-#### iOS
-```dart
-NotificationChannelData(
-  id: 'ios_channel',
-  name: 'iOS Notifications',
-  description: 'iOS-specific notifications',
-  importance: NotificationImportanceEnum.high,
-  priority: NotificationPriorityEnum.high,
-  playSound: true,
-  enableVibration: true,
-  enableLights: false,
-  showBadge: true,
-)
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### Notifications not showing:
-- Check Firebase configuration files are in place
-- Verify sender ID is correct
-- Check AndroidManifest.xml permissions
-- Ensure notification channels are created
-
-#### Scheduled notifications not working:
-- **Android 12+ (API 31+)**: Add `SCHEDULE_EXACT_ALARM` and `USE_EXACT_ALARM` permissions
-- **Android 13+ (API 33+)**: Request `SCHEDULE_EXACT_ALARM` permission at runtime
-- Ensure broadcast receivers are added to AndroidManifest.xml
-- Check scheduled time is in the future
-- Verify notification permissions are granted
-
-**Android 13+ Runtime Permission:**
-
-For Android 13+ devices, you need to request the exact alarm permission at runtime:
-
-```dart
-import 'package:permission_handler/permission_handler.dart';
-
-// Request exact alarm permission (Android 13+)
-if (Platform.isAndroid) {
-  final status = await Permission.scheduleExactAlarm.request();
-  if (status.isGranted) {
-    // Permission granted, you can schedule notifications
-  } else {
-    // Permission denied, handle gracefully
-    print('Exact alarm permission denied');
+```json
+{
+  "message": {
+    "token": "DEVICE_FCM_TOKEN",
+    "data": {
+      "schemaVersion": "2",
+      "id": "campaign-2026-09-21-a",
+      "idempotencyKey": "campaign-2026-09-21-a",
+      "command": "display",
+      "title": "A quieter way to catch up",
+      "body": "Your weekly summary is ready.",
+      "remotePresentation": "client",
+      "category": "product_updates",
+      "channelId": "general",
+      "route": "/weekly-summary",
+      "ttlSeconds": "86400",
+      "storeInInbox": "true",
+      "presentInApp": "false",
+      "data": "{\"summaryId\":\"week-38\"}"
+    },
+    "android": {
+      "priority": "high",
+      "ttl": "86400s"
+    },
+    "apns": {
+      "headers": {
+        "apns-push-type": "background",
+        "apns-priority": "5"
+      },
+      "payload": {
+        "aps": {
+          "content-available": 1
+        }
+      }
+    }
   }
 }
 ```
 
-#### Permission-related issues:
+The APNs `aps` object is not inside `message.data`, so its numeric value is
+valid there. Data-only Apple delivery is still best-effort and should not be
+used for an alert that must always be presented promptly.
 
-**"Exact alarms are not permitted"**
-- **Cause**: Missing `SCHEDULE_EXACT_ALARM` permission
-- **Fix**: Add permission to AndroidManifest.xml
-- **Alternative**: Use `scheduleNotification()` without exact timing
+### In-app message example
 
-**"No push notifications received"**
-- **Cause**: Missing `INTERNET` or `WAKE_LOCK` permission
-- **Fix**: Add basic permissions to AndroidManifest.xml
+`fcmh_inapp` is a JSON-encoded string:
 
-**"Notifications don't vibrate"**
-- **Cause**: Missing `VIBRATE` permission
-- **Fix**: Add `VIBRATE` permission to AndroidManifest.xml
-
-**"Foreground notifications not showing"**
-- **Cause**: Missing `FOREGROUND_SERVICE` permission
-- **Fix**: Add `FOREGROUND_SERVICE` permission to AndroidManifest.xml
-
-#### iOS badges not updating:
-- Requires proper APNs certificate configuration
-- May not work in simulator
-- **Must upload APNs key to Firebase Console**
-
-#### APNs token not set error:
-- This is **NORMAL** until APNs is configured
-- Generate APNs key in Apple Developer Console
-- Upload `.p8` key file to Firebase Console
-- Choose correct environment (Sandbox/Production)
-- **This is a Firebase requirement, not a plugin issue**
-
-#### Custom sounds not playing:
-- Add sound files to correct platform directories
-- Create notification channels before using sounds
-- Check file permissions and formats
-
-#### Analytics not tracking:
-- Ensure analytics callback is set
-- Check event names and data format
-- Verify analytics service integration
-
-### Debug Mode
-
-Enable debug mode for detailed logging:
-
-```dart
-// The plugin automatically logs detailed information in debug mode
-// Check console output for initialization and operation logs
-```
-
-### Error Handling
-
-The plugin reports setup and runtime failures through logs, diagnostics, and returned values where possible:
-
-```dart
-try {
-  await FirebaseMessagingHandler.instance.init(
-    senderId: 'your_sender_id',
-    androidChannelList: channels,
-    androidNotificationIconPath: '@drawable/ic_notification',
-  );
-} catch (e) {
-  print('Initialization failed: $e');
-  // Handle error appropriately
+```json
+{
+  "message": {
+    "token": "DEVICE_FCM_TOKEN",
+    "data": {
+      "fcmh_inapp": "{\"id\":\"welcome-2\",\"templateId\":\"builtin_generic\",\"trigger\":\"immediate\",\"category\":\"product_updates\",\"content\":{\"layout\":\"bottom_sheet\",\"title\":\"Welcome\",\"body\":\"Here are the two things worth knowing.\",\"buttons\":[{\"id\":\"continue\",\"label\":\"Continue\",\"style\":\"filled\"}]},\"analytics\":{\"campaign_id\":\"onboarding-2026\"}}"
+    }
+  }
 }
 ```
 
+Supported in-app trigger values are `immediate`, `next_foreground`,
+`app_launch`, and `custom`.
+
+### Reference server
+
+The [server package](server/README.md) is a tested TypeScript reference for
+Node 22.6 and the FCM HTTP v1 API. It includes:
+
+- envelope validation and payload preview;
+- installation, user, topic, and condition targeting;
+- batches, bounded concurrency, retry/backoff, and `Retry-After` handling;
+- token metadata and stale-token cleanup;
+- idempotency claims, scheduled jobs, cancellation, and dead letters;
+- authorization and optional App Check boundaries;
+- structured audit events.
+
+Its stores are in-memory reference implementations. Replace token,
+idempotency, job, and event stores with durable production adapters. Use
+Application Default Credentials or workload identity rather than distributing
+service-account key files.
+
+## Diagnostics and capabilities
+
+Use diagnostics when setting up a device or responding to a support report:
+
+```dart
+final result =
+    await FirebaseMessagingHandler.instance.runDiagnostics();
+
+debugPrint('Platform: ${result.platform}');
+debugPrint('Permission: ${result.authorizationStatus}');
+debugPrint('Token available: ${result.fcmTokenAvailable}');
+debugPrint('Pending schedules: ${result.pendingNotificationCount}');
+
+for (final recommendation in result.recommendations) {
+  debugPrint(recommendation);
+}
+```
+
+The permission wizard returns a structured summary for Android, Apple, web, or
+desktop-local mode:
+
+```dart
+final permissionResult =
+    await FirebaseMessagingHandler.instance.requestPermissionsWizard();
+debugPrint(permissionResult.overallStatus);
+```
+
+Capabilities answer a different question: whether a feature is supported in
+the current runtime and whether it still needs host setup.
+
+```dart
+final capabilities =
+    await FirebaseMessagingHandler.instance.getCapabilities();
+
+for (final capability in NotificationCapability.values) {
+  final status = capabilities[capability];
+  debugPrint(
+    '${capability.name}: ${status.supported} '
+    'setup=${status.requiresSetup} reason=${status.reason}',
+  );
+}
+```
+
+Use the capability matrix to hide or explain unavailable controls. Use
+diagnostics to find configuration problems. Neither replaces a physical-device
+test for background delivery, notification actions, or terminated launches.
+
+## Testing
+
+### Fast package tests
+
+Run analysis and the local suite from the package root:
+
+```bash
+flutter analyze
+flutter test
+(cd server && npm test)
+```
+
+[test/handlers_integration_test.dart](test/handlers_integration_test.dart)
+exercises lifecycle and click handling with synthetic `RemoteMessage` values.
+It does not need Firebase credentials or a device:
+
+```bash
+flutter test test/handlers_integration_test.dart
+```
+
+The public test-mode helpers can drive host-app widget tests without Firebase:
+
+```dart
+setUp(() {
+  FirebaseMessagingHandler.setTestMode(true);
+});
+
+tearDown(() {
+  FirebaseMessagingHandler.setTestMode(false);
+});
+
+test('routes a notification click', () async {
+  final stream = FirebaseMessagingHandler.getMockClickStream()!;
+
+  FirebaseMessagingHandler.addMockClickEvent(
+    FirebaseMessagingHandler.createMockNotificationData(
+      title: 'Test',
+      payload: const {'route': '/test'},
+    ),
+  );
+
+  final data = await stream.first;
+  expect(data.payload['route'], '/test');
+});
+```
+
+These helpers are for tests only; they do not affect production handling until
+test mode is enabled.
+
+### Device tests
+
+Device-deployable tests live in `example/` because the package root is a
+plugin, not an application runner.
+
+The comprehensive suite can run without send credentials, but skips real-send
+cases. With the repository’s test Firebase project configured:
+
+```bash
+cd example
+FCM_CREDENTIALS=$(base64 -i ../test/firebase_config/service_account.json | tr -d '\n')
+
+flutter test integration_test/comprehensive_test.dart \
+  --dart-define=FCM_TEST_SENDER_ID=<firebase-project-number> \
+  --dart-define=FCM_SERVICE_ACCOUNT_B64=$FCM_CREDENTIALS \
+  --device-id <device-id>
+```
+
+The focused real-push suite retrieves the device token, sends through FCM HTTP
+v1, and asserts the client result:
+
+```bash
+flutter test integration_test/real_push_test.dart \
+  --dart-define=FCM_TEST_SENDER_ID=<firebase-project-number> \
+  --dart-define=FCM_SERVICE_ACCOUNT_B64=$FCM_CREDENTIALS \
+  --device-id <device-id>
+```
+
+Android tray actions, background data bridging, notification taps, and a
+killed-process launch have a dedicated ADB harness:
+
+```bash
+bash test/firebase_config/android_lifecycle_e2e.sh \
+  --device <adb-device-id> \
+  --key-file test/firebase_config/service_account.json
+```
+
+Credentials under `test/firebase_config/` are gitignored. Never commit them.
+See [the integration-test guide](integration_test/README.md) for iOS driver,
+permission, and manual cold-start instructions.
+
+### Release checks
+
+Before publishing:
+
+```bash
+dart format --output=none --set-exit-if-changed .
+flutter analyze
+flutter test
+(cd server && npm test)
+flutter pub publish --dry-run
+pana --flutter-sdk /path/to/flutter .
+```
+
+The full release procedure is in
+[doc/release-checklist.md](doc/release-checklist.md).
+
+## Platform support
+
+This table describes package-owned behavior. Actual delivery also depends on
+Firebase/APNs credentials, user permission, network state, browser setup, and
+operating-system policy.
+
+| Capability | Android | iOS | Web | macOS | Windows | Linux |
+| --- | --- | --- | --- | --- | --- | --- |
+| FCM remote delivery | Yes | Yes | Yes | Firebase-dependent | No | No |
+| Foreground local presentation | Yes | Yes | Browser API | Yes | Yes, with toast identity | Yes |
+| One-time scheduling | Yes | Yes | No | Yes | Runtime-dependent | No package guarantee |
+| Recurring scheduling | Yes | Yes | No | Yes | No package guarantee | No package guarantee |
+| Exact schedule control | Permission-gated | OS-managed | No | OS-managed | No | No |
+| Notification actions | Yes | Registered categories | Service worker | Registered categories | Upstream-dependent | Upstream-dependent |
+| Inline reply | Yes | Yes | No | Yes | Upstream-dependent | No guarantee |
+| Direct app-icon badge mutation | No | Yes | No | No | No | No |
+| Groups or threads | Groups | Threads | Tag replacement | Threads | Upstream-dependent | Upstream-dependent |
+| Inbox, preferences, policy | Yes | Yes | Yes | Yes | Yes | Yes |
+| FCM topics | Yes | Yes | Yes | Firebase-dependent | No | No |
+| Delivery-metrics toggle | Android SDK | Native hook required | Worker setup required | Native setup | No | No |
+
+Call `getCapabilities()` for the current runtime rather than hard-coding this
+table into product logic. See
+[the detailed capability notes](doc/platform-capabilities.md).
+
+## Troubleshooting
+
+### A notification never arrives
+
+Work from the outside in:
+
+1. Run `runDiagnostics()` and inspect every recommendation.
+2. Confirm the token belongs to this Firebase project and current app install.
+3. Check Firebase credentials, application ID/bundle ID, and platform config
+   files.
+4. Check notification permission and Android channel settings.
+5. Send a minimal system-presented notification from the Firebase Console.
+6. Test the exact HTTP v1 payload on a physical device.
+7. If it is data-only, check OS background restrictions and message priority.
+
+Android force-stop prevents delivery until the user opens the app again. Apple
+data-only delivery is best-effort. Neither behavior can be bypassed by a
+Flutter package.
+
+### Foreground messages arrive but no banner appears
+
+The app is responsible for foreground presentation. Confirm
+`enableForegroundMessageHandling` is true and
+`ForegroundNotificationOptions.enabled` has not been disabled. On Android,
+check the channel’s importance. On Apple platforms, check permission and the
+configured Darwin presentation details.
+
+### Android shows a silent or low-priority notification
+
+Android channel settings are persistent. Once a user or app creates a channel,
+changing its importance or sound in Dart does not rewrite the existing system
+channel. Use a new channel ID for materially different behavior, or ask the
+user to change the existing channel in system settings.
+
+Also verify that:
+
+- the small icon resource exists;
+- the payload names the expected channel;
+- the channel was created before the notification;
+- device-level sound, vibration, and Do Not Disturb settings allow it.
+
+### Scheduling does not fire
+
+Check that the scheduled time is in the future and notification permission is
+available. Use inexact scheduling unless exact timing is a product
+requirement. For exact Android schedules, declare the appropriate permission,
+query capabilities, and call `requestExactAlarmPermission()`. Add reboot
+support in the host manifest when schedules must survive a restart.
+
+After timezone changes, call `refreshLocalTimezone()` and reschedule reminders
+whose intended local wall-clock time changed.
+
+### iOS reports that an APNs token is unavailable
+
+Confirm the Push Notifications capability, Background Modes configuration,
+bundle ID, provisioning profile, APNs key in Firebase, and a physical-device
+run. Leave Firebase AppDelegate proxying enabled unless you have implemented
+all required delegate forwarding yourself.
+
+### A custom sound does not play
+
+Check the resource location and filename, then check system settings. On
+Android, sound belongs to the channel and an existing channel keeps its
+original sound. On Apple platforms, ensure the sound is part of the app target
+and the payload uses the correct complete filename.
+
+### Web works only while the page is open
+
+Inspect service-worker registration, scope, Firebase config, VAPID key, browser
+permission, HTTPS deployment, and the browser console. A worker outside the
+Flutter app’s controlling scope cannot handle background messages for it.
+
+### Actions appear on one platform but not another
+
+Register Apple action categories at initialization. On Android, ensure the
+notification is client-presented when package-defined actions are required.
+On web, implement the worker click/action bridge. Always check capabilities
+before showing an inline-reply feature.
+
+### Turn on package logs
+
+Set `enableDebugLogging: true` while diagnosing a development device. Do not
+leave verbose payload logging enabled in production.
+
+## Further documentation
+
+- [Documentation index](doc/index.md)
+- [Migrating to 2.0.0](doc/v2-migration.md)
+- [Notification envelope v2](doc/features/envelope-v2.md)
+- [Server recipes](doc/features/server-recipes.md)
+- [Android setup](doc/getting-started/android-setup.md)
+- [iOS setup](doc/getting-started/ios-setup.md)
+- [Web setup](doc/getting-started/web-setup.md)
+- [Desktop setup](doc/getting-started/desktop-setup.md)
+- [Example application](example/README.md)
+- [Changelog](CHANGELOG.md)
+
 ## Contributing
 
-Contributions are welcome. Please see the [Contributing Guide](CONTRIBUTING.md) for details.
+Issues and pull requests are welcome at
+[github.com/afewgoodcoders/firebase_messaging_handler](https://github.com/afewgoodcoders/firebase_messaging_handler).
 
-### Development Setup
+For a local checkout:
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+```bash
+flutter pub get
+flutter analyze
+flutter test
+(cd server && npm test)
+```
 
-### Code Style
-
-- Follow Dart/Flutter conventions
-- Add documentation for user-visible behavior
-- Include unit tests
-- Ensure backward compatibility
+Please include tests for behavior changes and avoid committing Firebase
+credentials, tokens, generated build output, or private notification payloads.
 
 ## License
 
-This project is licensed under the BSD 3-Clause License - see the [LICENSE](LICENSE) file for details.
+BSD 3-Clause. See [LICENSE](LICENSE).
 
-## Support
-
-- **Documentation:** [API Reference](https://pub.dev/documentation/firebase_messaging_handler/latest/)
-- **Guides:** [GitHub Pages docs](https://qoder-official.github.io/firebase_messaging_handler/)
-- **Examples:** [Example App](example/) – guided FCM showcase experience
-- **Issues:** [GitHub Issues](https://github.com/qoder-official/firebase_messaging_handler/issues)
-
-## What's Next?
-
-**Next up in the package**
-- **Web polish** - pre-permission explainer overlay plus deeper service-worker validation.
-- **macOS push validation** - verify real token retrieval and foreground/background delivery on macOS hardware.
-- **Rich Android styles** - big picture, inbox, progress, and media-style notifications.
-- **Permission Wizard v2** - rationale UI, exact-alarm guidance, provisional iOS flows, and richer result objects.
-- **Remote notification cancel** - allow backend payloads to cancel local notifications by ID/group/channel.
-
-**Platform and delivery roadmap**
-- **Desktop runtime validation** - verify Windows/Linux local mode on real runners and document exact behavior.
-- **6/6 platform support on pub.dev** - use desktop declarations plus runtime validation to maximize platform credit.
-- **Publish pipeline hardening** - finish external setup for Codecov and pub.dev publishing secrets/trusted publishing.
-
-**Documentation and growth**
-- **README breakup** - keep this file as the landing page and move deep walkthroughs into docs pages.
-- **API doc coverage** - continue documenting the remaining exported surface to push toward full dartdoc coverage.
-- **Community launch** - blog post, showcase GIFs, Flutter Gems, FlutterAwesome, and social launch.
-
----
-
-Built for Flutter apps that need practical Firebase Messaging workflows without rebuilding the same notification plumbing every release.
+Maintained by [A Few Good Coders](https://afewgoodcoders.com).

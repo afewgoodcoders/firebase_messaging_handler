@@ -5,7 +5,8 @@ title: Server Recipes
 
 # Server Recipes
 
-The repository includes backend starter payloads under `server_recipes/` for teams sending pushes from Cloud Functions, Node backends, curl, or Postman.
+The repository includes a tested TypeScript reference package under `server/`
+and lightweight payload samples under `server_recipes/`.
 
 Included recipes cover:
 
@@ -15,10 +16,17 @@ Included recipes cover:
 - rich media
 - topic campaigns
 
+The reference package additionally covers token registration, envelope
+validation, FCM HTTP v1 retry/backoff, idempotency, scheduling, stale-token
+cleanup, authorization/App Check boundaries, audit events, and dead letters.
+
 Repository paths:
 
 - `server_recipes/README.md`
 - `server_recipes/cloud_functions/`
 - `server_recipes/rest_api/`
+- `server/README.md`
+- `schema/notification-envelope-v2.schema.json`
 
-These examples are aligned with the package's current payload parsing rules, including JSON-string values inside `message.data` where FCM HTTP v1 requires strings.
+For production sends, prefer `server/src/envelope.ts` so every value is encoded
+as an FCM-compatible string and payload size is validated before the request.

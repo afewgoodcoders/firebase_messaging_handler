@@ -22,7 +22,13 @@ Run from the package root:
 dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test
+(cd server && npm test)
+(cd example && flutter build web --release)
+(cd example && flutter build apk --debug)
 ```
+
+On a macOS release host, also build the example for the iOS simulator and run
+the podspec/SPM checks appropriate to the release.
 
 ## Publish Dry Run
 
@@ -73,10 +79,10 @@ flutter test integration_test/real_push_test.dart \
   --device-id <device-id>
 ```
 
-The package-root integration test is synthetic and does not deploy an Android app:
+The package-root handler integration test is synthetic and runs on the test VM:
 
 ```bash
-flutter test integration_test/handlers_integration_test.dart
+flutter test test/handlers_integration_test.dart
 ```
 
 ## Final Review
@@ -84,4 +90,8 @@ flutter test integration_test/handlers_integration_test.dart
 - Confirm `CHANGELOG.md` is user-facing and does not include raw validation logs.
 - Confirm README links resolve to existing files.
 - Confirm `doc/index.md` reflects current platform support and setup flow.
+- Validate the JSON Schema and reference server tests.
+- Run physical-device scenarios for foreground, background, terminated launch,
+  actions, inline reply, exact/inexact scheduling, token rotation, duplicate
+  delivery, remote cancel/mark-read, rich media, and permission denial.
 - Commit release changes before publishing to avoid dirty-worktree publish warnings.

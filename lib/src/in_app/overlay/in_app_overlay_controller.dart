@@ -142,10 +142,7 @@ class _InAppOverlayHostState extends State<InAppOverlayHost> {
 }
 
 class _InAppOverlayScope extends InheritedWidget {
-  const _InAppOverlayScope({
-    required this.controller,
-    required super.child,
-  });
+  const _InAppOverlayScope({required this.controller, required super.child});
 
   final InAppOverlayController controller;
 

@@ -24,12 +24,7 @@ class BadgeManager implements BadgeManagerInterface {
 
   @override
   Future<bool> isSupported() async {
-    // Web doesn't support app icon badges in the traditional sense
-    if (isWeb) return false;
-
-    // iOS/macOS are supported directly. Android support is launcher-dependent,
-    // but the plugin can still track badge counts and attempt to apply them.
-    return isIOS || isMacOS || isAndroid;
+    return _notificationService.isBadgeSupported();
   }
 
   @override
@@ -37,7 +32,8 @@ class BadgeManager implements BadgeManagerInterface {
     try {
       if (count < 0) {
         _logMessage(
-            '[BadgeManager] Badge count cannot be negative. Setting to 0.');
+          '[BadgeManager] Badge count cannot be negative. Setting to 0.',
+        );
         count = 0;
       }
 
@@ -50,15 +46,8 @@ class BadgeManager implements BadgeManagerInterface {
       await _persistBadgeCount(count);
 
       // 2. Update platform specific badge
-      if (isIOS || isMacOS) {
-        // iOS/macOS handling via flutter_local_notifications (or platform channel if we had one)
-        // Currently delegating to the existing service which wraps flutter_local_notifications
+      if (isIOS) {
         await _notificationService.setIOSBadgeCount(count);
-      } else if (isAndroid) {
-        // Android handling
-        // For now, we update the service which might set it on the next notification
-        // or if we implement a native bridge later.
-        await _notificationService.setAndroidBadgeCount(count);
       }
 
       _logMessage('[BadgeManager] Badge count set to $count');

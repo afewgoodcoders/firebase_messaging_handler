@@ -2,11 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class TokenDebugOverlay extends StatelessWidget {
-  const TokenDebugOverlay({
-    super.key,
-    required this.token,
-    this.onRefresh,
-  });
+  const TokenDebugOverlay({super.key, required this.token, this.onRefresh});
 
   final String? token;
   final Future<void> Function()? onRefresh;

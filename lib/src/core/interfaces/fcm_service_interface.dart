@@ -1,12 +1,23 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import '../../models/notification_permission_options.dart';
+
 /// Interface for Firebase Cloud Messaging service operations
 abstract class FCMServiceInterface {
   /// Initializes the FCM service
   Future<bool> initialize();
 
   /// Requests notification permissions
-  Future<bool> requestPermissions();
+  Future<bool> requestPermissions({
+    NotificationPermissionOptions options =
+        const NotificationPermissionOptions(),
+  });
+
+  /// Requests permission and returns the complete platform settings.
+  Future<NotificationSettings> requestPermissionSettings({
+    NotificationPermissionOptions options =
+        const NotificationPermissionOptions(),
+  });
 
   /// Gets the FCM token
   Future<String?> getToken({String? vapidKey});
@@ -40,7 +51,8 @@ abstract class FCMServiceInterface {
 
   /// Registers the background message handler.
   Future<void> setBackgroundMessageHandler(
-      Future<void> Function(RemoteMessage message) handler);
+    Future<void> Function(RemoteMessage message) handler,
+  );
 
   /// Sets foreground notification presentation options
   Future<void> setForegroundNotificationPresentationOptions({
@@ -48,4 +60,7 @@ abstract class FCMServiceInterface {
     bool badge = true,
     bool sound = true,
   });
+
+  /// Enables or disables Firebase delivery-metrics export where supported.
+  Future<void> setDeliveryMetricsExportToBigQuery(bool enabled);
 }

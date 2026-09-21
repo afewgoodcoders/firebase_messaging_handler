@@ -18,9 +18,11 @@ class PermissionWizardService {
 
     if (isWindows || isLinux) {
       notes.add(
-          'Firebase Cloud Messaging is not available on $currentPlatformName. Use local notifications, scheduling, inbox, and in-app templates in desktop mode.');
+        'Firebase Cloud Messaging is not available on $currentPlatformName. Use local notifications, scheduling, inbox, and in-app templates in desktop mode.',
+      );
       notes.add(
-          'If you need remote delivery on desktop, route messages through your backend and present them locally in the app.');
+        'If you need remote delivery on desktop, route messages through your backend and present them locally in the app.',
+      );
       return PermissionWizardResult(
         overallStatus: 'desktop_local_mode',
         notes: notes,
@@ -32,7 +34,8 @@ class PermissionWizardService {
       // will request when getToken is called. We surface a note only.
       webStatus = 'prompt';
       notes.add(
-          'Web: ensure you call requestPermission() or getToken() to trigger the browser prompt.');
+        'Web: ensure you call requestPermission() or getToken() to trigger the browser prompt.',
+      );
       return PermissionWizardResult(
         overallStatus: 'web_prompt',
         webPermission: webStatus,
@@ -40,23 +43,24 @@ class PermissionWizardService {
       );
     }
 
-    final NotificationSettings settings =
-        await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
+    final NotificationSettings settings = await FirebaseMessaging.instance
+        .requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+          provisional: false,
+        );
 
     if (isAndroid) {
       // POST_NOTIFICATIONS is covered by requestPermission on Android 13+.
       androidPost =
           settings.authorizationStatus == AuthorizationStatus.authorized ||
-              settings.authorizationStatus == AuthorizationStatus.provisional;
+          settings.authorizationStatus == AuthorizationStatus.provisional;
       androidExactAlarmNote =
           'Exact alarm permission must be granted in system settings on Android 14+ (SCHEDULE_EXACT_ALARM).';
       notes.add(
-          'Android: if scheduling exact alarms, prompt users to enable exact alarms in system settings.');
+        'Android: if scheduling exact alarms, prompt users to enable exact alarms in system settings.',
+      );
     } else if (isIOS) {
       iosStatus = settings.authorizationStatus.name;
       if (settings.authorizationStatus != AuthorizationStatus.authorized) {
@@ -66,7 +70,7 @@ class PermissionWizardService {
 
     final bool ok =
         settings.authorizationStatus == AuthorizationStatus.authorized ||
-            settings.authorizationStatus == AuthorizationStatus.provisional;
+        settings.authorizationStatus == AuthorizationStatus.provisional;
 
     return PermissionWizardResult(
       overallStatus: ok ? 'granted' : 'denied',

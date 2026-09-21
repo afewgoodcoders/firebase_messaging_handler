@@ -55,15 +55,20 @@ class InAppNotificationData {
     return InAppNotificationData(
       id: map['id'] as String,
       templateId: map['templateId'] as String,
-      triggerType:
-          InAppTriggerTypeEnum.fromString(map['triggerType'] as String?),
+      triggerType: InAppTriggerTypeEnum.fromString(
+        map['triggerType'] as String?,
+      ),
       content: Map<String, dynamic>.from(
-          (map['content'] as Map?) ?? <String, dynamic>{}),
+        (map['content'] as Map?) ?? <String, dynamic>{},
+      ),
       analytics: Map<String, dynamic>.from(
-          (map['analytics'] as Map?) ?? <String, dynamic>{}),
+        (map['analytics'] as Map?) ?? <String, dynamic>{},
+      ),
       rawPayload: Map<String, dynamic>.from(
-          (map['rawPayload'] as Map?) ?? <String, dynamic>{}),
-      receivedAt: DateTime.tryParse(map['receivedAt'] as String? ?? '') ??
+        (map['rawPayload'] as Map?) ?? <String, dynamic>{},
+      ),
+      receivedAt:
+          DateTime.tryParse(map['receivedAt'] as String? ?? '') ??
           DateTime.now(),
     );
   }

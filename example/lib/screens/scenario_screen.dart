@@ -76,8 +76,8 @@ class _HeroTitle extends StatelessWidget {
                 Text(
                   notification.title ?? 'Untitled notification',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),

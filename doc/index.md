@@ -17,6 +17,8 @@ Follow the guide for the platforms you ship:
 - [macOS setup](./getting-started/macos-setup)
 - [Desktop setup](./getting-started/desktop-setup)
 - [Web setup](./getting-started/web-setup)
+- [2.0 migration](./v2-migration)
+- [Platform capability matrix](./platform-capabilities)
 
 For releases and local validation, use the [release checklist](./release-checklist).
 
@@ -35,10 +37,13 @@ For releases and local validation, use the [release checklist](./release-checkli
 
 1. Install the package and initialize Firebase for your app.
 2. Complete the platform setup guide for every target you ship.
-3. Call `FirebaseMessagingHandler.instance.init(...)` once during app startup.
-4. Subscribe to the returned click stream and wire your navigation handler.
-5. Run `runDiagnostics()` on real devices before debugging backend payloads.
-6. For release validation, run unit tests, publish dry-run, `pana`, and the example Android integration tests from the release checklist.
+3. Call `FirebaseMessagingHandler.instance.initialize(FCMConfiguration(...))`
+   once during app startup.
+4. Request permission from your own explanatory UI, then synchronize the token.
+5. Subscribe to the returned click stream and wire your navigation handler.
+6. Run `runDiagnostics()` on real devices before debugging backend payloads.
+7. For release validation, run unit tests, publish dry-run, `pana`, and the
+   example device integration tests from the release checklist.
 
 ## Core Features
 
@@ -50,6 +55,7 @@ For releases and local validation, use the [release checklist](./release-checkli
 - [Quiet hours](./features/quiet-hours)
 - [Diagnostics](./features/diagnostics)
 - [Server recipes](./features/server-recipes)
+- [Envelope v2](./features/envelope-v2)
 
 ## Package Positioning
 

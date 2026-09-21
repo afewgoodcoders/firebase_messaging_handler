@@ -1,5 +1,1 @@
-enum NotificationTypeEnum {
-  foreground,
-  background,
-  terminated,
-}
+enum NotificationTypeEnum { foreground, background, terminated }

@@ -170,7 +170,7 @@ const Map<String, String> _templateSamples = {
     "autoDismissSeconds": 0
   }
 }
-'''
+''',
 };
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -188,8 +188,9 @@ class _HomeScreenState extends State<HomeScreen> {
       Provider.of<NotificationProvider>(context, listen: false),
       rootNavigatorKey,
     );
-    _templateController =
-        TextEditingController(text: _templateSamples[_selectedTemplate]);
+    _templateController = TextEditingController(
+      text: _templateSamples[_selectedTemplate],
+    );
     _initializeNotifications();
     _registerInAppTemplates();
   }
@@ -217,8 +218,10 @@ class _HomeScreenState extends State<HomeScreen> {
         } catch (e) {
           debugPrint('[HomeScreen] Error fetching FCM token: $e');
           if (mounted) {
-            provider.setFcmToken(null,
-                error: 'Unexpected error fetching token: $e');
+            provider.setFcmToken(
+              null,
+              error: 'Unexpected error fetching token: $e',
+            );
           }
         }
       }
@@ -233,8 +236,10 @@ class _HomeScreenState extends State<HomeScreen> {
     FirebaseMessagingHandler.instance.registerInAppNotificationTemplates({
       'builtin_generic': BuiltInInAppTemplates.generic(
         onAction: (actionId, data) {
-          Provider.of<NotificationProvider>(context, listen: false)
-              .addActivity('Template action: $actionId');
+          Provider.of<NotificationProvider>(
+            context,
+            listen: false,
+          ).addActivity('Template action: $actionId');
         },
       ),
     });
@@ -257,11 +262,9 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _diagnosticsLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Diagnostics failed: $error'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Diagnostics failed: $error')));
     }
   }
 
@@ -274,8 +277,8 @@ class _HomeScreenState extends State<HomeScreen> {
         final metadata = result.metadata;
         final webDiagnostics =
             metadata['webDiagnostics'] is Map<String, dynamic>
-                ? metadata['webDiagnostics'] as Map<String, dynamic>
-                : null;
+            ? metadata['webDiagnostics'] as Map<String, dynamic>
+            : null;
 
         final entries = [
           _buildDiagnosticsRow(
@@ -289,8 +292,8 @@ class _HomeScreenState extends State<HomeScreen> {
             metadata['fcmSupported'] == false
                 ? 'FCM unavailable on ${result.platform}; local desktop mode active'
                 : result.fcmTokenAvailable
-                    ? 'Token cached locally'
-                    : 'No token saved',
+                ? 'Token cached locally'
+                : 'No token saved',
             metadata['fcmSupported'] == false || result.fcmTokenAvailable,
           ),
           _buildDiagnosticsRow(
@@ -305,8 +308,8 @@ class _HomeScreenState extends State<HomeScreen> {
             metadata['fcmSupported'] == false
                 ? 'FCM background handling is unavailable on ${result.platform}'
                 : metadata['backgroundHandlerRegistered'] == true
-                    ? 'Registered via configureBackgroundMessageHandler'
-                    : 'No background handler registered',
+                ? 'Registered via configureBackgroundMessageHandler'
+                : 'No background handler registered',
             metadata['fcmSupported'] == false ||
                 metadata['backgroundHandlerRegistered'] == true,
           ),
@@ -335,8 +338,8 @@ class _HomeScreenState extends State<HomeScreen> {
               webDiagnostics['serviceWorkerControllerPresent'] == true
                   ? 'A service worker is controlling this page'
                   : webDiagnostics['serviceWorkerApiAvailable'] == true
-                      ? 'API available, but no active controller found'
-                      : 'Service workers unavailable in this browser context',
+                  ? 'API available, but no active controller found'
+                  : 'Service workers unavailable in this browser context',
               webDiagnostics['serviceWorkerControllerPresent'] == true,
             ),
           if (webDiagnostics != null)
@@ -361,15 +364,13 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Notification Doctor',
-                  style: theme.textTheme.titleLarge,
-                ),
+                Text('Notification Doctor', style: theme.textTheme.titleLarge),
                 const SizedBox(height: 8),
                 Text(
                   'Platform: ${result.platform}',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: Colors.grey.shade600),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey.shade600,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 ...entries,
@@ -377,10 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     (webDiagnostics['locationProtocol'] != null ||
                         webDiagnostics['locationHost'] != null)) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    'Web runtime',
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  Text('Web runtime', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   SelectableText(
                     'Origin: ${webDiagnostics['locationProtocol'] ?? 'unknown'}//'
@@ -390,10 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
                 if (recommendations.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  Text(
-                    'Recommendations',
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  Text('Recommendations', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   ...recommendations.map(
                     (item) => ListTile(
@@ -418,10 +413,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Icon(icon, color: color),
-      title: Text(
-        label,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(description),
     );
   }
@@ -459,8 +451,10 @@ class _HomeScreenState extends State<HomeScreen> {
           return Stack(
             children: [
               SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -588,10 +582,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           description: _diagnosticsLoading
                               ? 'Running environment checks...'
                               : _latestDiagnostics == null
-                                  ? 'Runs diagnostics for permissions, token, badges & web capabilities.'
-                                  : _latestDiagnostics!.recommendations.isEmpty
-                                      ? 'Last run: All systems look good.'
-                                      : 'Last run highlighted ${_latestDiagnostics!.recommendations.length} improvement(s).',
+                              ? 'Runs diagnostics for permissions, token, badges & web capabilities.'
+                              : _latestDiagnostics!.recommendations.isEmpty
+                              ? 'Last run: All systems look good.'
+                              : 'Last run highlighted ${_latestDiagnostics!.recommendations.length} improvement(s).',
                           icon: Icons.medical_information,
                           color: Colors.teal,
                           onTap: _diagnosticsLoading ? null : _runDiagnostics,
@@ -706,7 +700,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         FeatureCard(
                           title: 'Update Badges',
                           description:
-                              'Sync iOS + Android badge counts to show parity.',
+                              'Update the app-icon badge when the runtime supports it.',
                           icon: Icons.confirmation_num,
                           color: Colors.teal,
                           onTap: _notificationService.updateBadges,
@@ -714,8 +708,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             context,
                             title: 'Badge Management',
                             body:
-                                'Invokes setIOSBadgeCount and setAndroidBadgeCount through the handler and mirrors the '
-                                'state in the provider so you can observe how parity is achieved.',
+                                'Checks runtime capabilities before invoking the iOS native badge bridge. Unsupported '
+                                'platforms report that limitation instead of simulating success.',
                           ),
                         ),
                         FeatureCard(
@@ -742,25 +736,26 @@ class _HomeScreenState extends State<HomeScreen> {
                           onTap: () async {
                             final notificationProvider =
                                 Provider.of<NotificationProvider>(
-                              context,
-                              listen: false,
-                            );
+                                  context,
+                                  listen: false,
+                                );
                             final messenger = ScaffoldMessenger.of(context);
                             await _notificationService.messagingHandler
                                 .createCustomSoundChannel(
-                              channelId: 'music_channel',
-                              channelName: 'Music Notifications',
-                              channelDescription:
-                                  'Notifications with custom sound',
-                              soundFileName: 'default',
-                              importance: NotificationImportanceEnum.high,
-                              priority: NotificationPriorityEnum.high,
-                            );
+                                  channelId: 'music_channel',
+                                  channelName: 'Music Notifications',
+                                  channelDescription:
+                                      'Notifications with custom sound',
+                                  soundFileName: 'default',
+                                  importance: NotificationImportanceEnum.high,
+                                  priority: NotificationPriorityEnum.high,
+                                );
                             if (!mounted) return;
                             messenger.showSnackBar(
                               const SnackBar(
-                                content:
-                                    Text('Custom sound channel registered.'),
+                                content: Text(
+                                  'Custom sound channel registered.',
+                                ),
                               ),
                             );
                             notificationProvider.addActivity(
@@ -787,7 +782,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             if (!mounted) return;
                             messenger.showSnackBar(
                               const SnackBar(
-                                  content: Text('Demo state cleared.')),
+                                content: Text('Demo state cleared.'),
+                              ),
                             );
                           },
                           onInfoTap: () => _showFeatureInfo(
@@ -1166,7 +1162,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           )
         else
-          ...provider.notifications.take(10).map(
+          ...provider.notifications
+              .take(10)
+              .map(
                 (notification) => NotificationCard(
                   notification: notification,
                   onTap: () => _openTimelineDetails(notification),
@@ -1211,7 +1209,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.grey.shade600,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
@@ -1225,7 +1225,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(color: Colors.grey.shade700),
               )
             else
-              ...provider.activityLog.take(8).map(
+              ...provider.activityLog
+                  .take(8)
+                  .map(
                     (entry) => ListTile(
                       leading: const Icon(Icons.bolt_outlined),
                       title: Text(entry.label),
@@ -1264,8 +1266,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline,
-                      color: Colors.blue.shade700, size: 20),
+                  Icon(
+                    Icons.info_outline,
+                    color: Colors.blue.shade700,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1292,10 +1297,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     items: _templateSamples.keys
                         .map(
-                          (name) => DropdownMenuItem(
-                            value: name,
-                            child: Text(name),
-                          ),
+                          (name) =>
+                              DropdownMenuItem(value: name, child: Text(name)),
                         )
                         .toList(),
                     onChanged: (value) {

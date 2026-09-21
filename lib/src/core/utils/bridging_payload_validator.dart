@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../models/notification_envelope.dart';
+
 /// Validates data-only / bridging payloads before promotion or unified handling.
 class BridgingPayloadValidator {
   /// Returns true when the payload is valid. Calls [onError] with a human-friendly
@@ -15,6 +17,18 @@ class BridgingPayloadValidator {
       return false;
     }
 
+    final Map<String, dynamic> normalized = normalize(data);
+    data
+      ..clear()
+      ..addAll(normalized);
+
+    if (data.containsKey('schemaVersion')) {
+      final NotificationEnvelopeValidationResult result =
+          NotificationEnvelope.fromMap(data).validate();
+      if (!result.isValid) return fail(result.errors.join('; '));
+      return true;
+    }
+
     final String? title = asString(data['title']);
     final String? body = asString(data['body']);
 
@@ -22,22 +36,11 @@ class BridgingPayloadValidator {
       return fail('missing "title" or "body" for data-only bridge');
     }
 
-    // Analytics: allow map or JSON string representing a map.
+    // Analytics: normalization accepts a map or JSON string representing a map.
     final dynamic analytics = data['analytics'];
     if (analytics != null) {
       if (analytics is Map<String, dynamic>) {
         // ok
-      } else if (analytics is String) {
-        try {
-          final decoded = jsonDecode(analytics);
-          if (decoded is Map<String, dynamic>) {
-            data['analytics'] = decoded;
-          } else {
-            return fail('"analytics" JSON must decode to a map');
-          }
-        } catch (_) {
-          return fail('"analytics" must be a map or valid JSON string');
-        }
       } else {
         return fail('"analytics" must be a map or JSON string');
       }
@@ -77,5 +80,31 @@ class BridgingPayloadValidator {
     }
 
     return true;
+  }
+
+  /// Decodes JSON-encoded FCM values into the application-level payload shape.
+  ///
+  /// FCM requires all `data` values to be strings, so lists and maps such as
+  /// actions, analytics, and platform overrides arrive as JSON strings.
+  static Map<String, dynamic> normalize(Map<String, dynamic> data) {
+    final Map<String, dynamic> result = Map<String, dynamic>.from(data);
+    const Set<String> jsonFields = <String>{
+      'actions',
+      'analytics',
+      'platform',
+      'data',
+      'titleLocArgs',
+      'bodyLocArgs',
+    };
+    for (final String field in jsonFields) {
+      final dynamic value = result[field];
+      if (value is! String || value.isEmpty) continue;
+      try {
+        result[field] = jsonDecode(value);
+      } catch (_) {
+        // Validation below reports the precise expected type.
+      }
+    }
+    return result;
   }
 }

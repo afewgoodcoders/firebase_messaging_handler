@@ -25,8 +25,9 @@ class _FakeStorage implements NotificationInboxStorageInterface {
   }) async {
     final int start = page * pageSize;
     if (start >= _items.length) return <NotificationInboxItem>[];
-    final int end =
-        (start + pageSize) > _items.length ? _items.length : start + pageSize;
+    final int end = (start + pageSize) > _items.length
+        ? _items.length
+        : start + pageSize;
     return _items.sublist(start, end);
   }
 

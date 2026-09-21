@@ -9,10 +9,14 @@ abstract class NotificationServiceInterface {
   Future<bool> initialize({
     required List<NotificationChannelData> androidChannels,
     required String androidIconPath,
+    List<NotificationActionCategory> actionCategories =
+        const <NotificationActionCategory>[],
+    WindowsNotificationOptions? windows,
+    bool enableDebugLogging = false,
   });
 
   /// Shows a local notification
-  Future<void> showNotification({
+  Future<bool> showNotification({
     required int id,
     required String title,
     required String body,
@@ -21,18 +25,24 @@ abstract class NotificationServiceInterface {
     String? groupKey,
     String? sortKey,
     String? category,
+    String? threadIdentifier,
+    bool isGroupSummary = false,
+    String? groupAlertSummary,
     AndroidNotificationDetails? androidDetailsOverride,
     DarwinNotificationDetails? iosDetailsOverride,
+    LinuxNotificationDetails? linuxDetailsOverride,
+    WindowsNotificationDetails? windowsDetailsOverride,
   });
 
   /// Shows a notification with actions
-  Future<void> showNotificationWithActions({
+  Future<bool> showNotificationWithActions({
     required int id,
     required String title,
     required String body,
     required List<NotificationAction> actions,
     Map<String, dynamic>? payload,
     String? channelId,
+    String? actionCategoryId,
   });
 
   /// Schedules a notification
@@ -44,6 +54,8 @@ abstract class NotificationServiceInterface {
     Map<String, dynamic>? payload,
     String? channelId,
     List<NotificationAction>? actions,
+    String? actionCategoryId,
+    NotificationScheduleMode scheduleMode = NotificationScheduleMode.inexact,
   });
 
   /// Schedules a recurring notification
@@ -59,13 +71,22 @@ abstract class NotificationServiceInterface {
   });
 
   /// Cancels a notification
-  Future<void> cancelNotification(int id);
+  Future<bool> cancelNotification(int id);
 
   /// Cancels all notifications
-  Future<void> cancelAllNotifications();
+  Future<bool> cancelAllNotifications();
 
   /// Gets pending notifications
-  Future<List<dynamic>> getPendingNotifications();
+  Future<List<PendingNotificationSnapshot>> getPendingNotifications();
+
+  /// Gets notifications currently visible in the system notification UI.
+  Future<List<ActiveNotificationSnapshot>> getActiveNotifications();
+
+  /// Returns whether system notifications are enabled for this application.
+  Future<bool?> areNotificationsEnabled();
+
+  /// Deletes an Android notification channel created by the application.
+  Future<bool> deleteNotificationChannel(String channelId);
 
   /// Refreshes the timezone used by scheduled notifications.
   Future<String?> refreshLocalTimezone();
@@ -87,4 +108,13 @@ abstract class NotificationServiceInterface {
 
   /// Returns browser capability and runtime checks for web notification support.
   Future<Map<String, dynamic>> getWebRuntimeDiagnostics();
+
+  /// Opens this app's notification settings when supported by the platform.
+  Future<bool> openAppNotificationSettings();
+
+  /// Whether Android can currently schedule exact alarms.
+  Future<bool?> canScheduleExactNotifications();
+
+  /// Opens or requests Android's exact-alarm permission flow.
+  Future<bool> requestExactAlarmPermission();
 }

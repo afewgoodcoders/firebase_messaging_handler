@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "qoder.flutter.fmhexample.fmhexample"
+    namespace = "com.afewgoodcoders.fmhexample"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -24,11 +24,14 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "qoder.flutter.fmhexample"
+        // Override with ORG_GRADLE_PROJECT_fmhApplicationId when using a local
+        // Firebase config registered to a different example application ID.
+        applicationId = providers.gradleProperty("fmhApplicationId")
+            .orElse("com.afewgoodcoders.fmhexample")
+            .get()
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

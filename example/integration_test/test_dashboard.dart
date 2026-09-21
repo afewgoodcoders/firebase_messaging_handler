@@ -121,9 +121,7 @@ class _DashboardScreenState extends State<_DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients &&
           _scrollController.position.hasContentDimensions) {
-        _scrollController.jumpTo(
-          _scrollController.position.maxScrollExtent,
-        );
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
       }
     });
   }
@@ -145,9 +143,9 @@ class _DashboardScreenState extends State<_DashboardScreen> {
                     category: category,
                     cases: suite.byCategory(category),
                   ),
-                  ...suite.byCategory(category).map(
-                        (tc) => _TestTile(testCase: tc),
-                      ),
+                  ...suite
+                      .byCategory(category)
+                      .map((tc) => _TestTile(testCase: tc)),
                   const SizedBox(height: 8),
                 ],
               ],
@@ -211,17 +209,19 @@ class _SummaryBar extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 _Chip(suite.passed, '✓ Passed', const Color(0xFF3FB950)),
-                const SizedBox(width: 8),
                 _Chip(suite.failed, '✗ Failed', const Color(0xFFF85149)),
-                const SizedBox(width: 8),
                 _Chip(suite.skipped, '⏭ Skipped', const Color(0xFFD29922)),
-                const SizedBox(width: 8),
-                _Chip(suite.pending + suite.running, '· Pending',
-                    const Color(0xFF8B949E)),
-                const Spacer(),
+                _Chip(
+                  suite.pending + suite.running,
+                  '· Pending',
+                  const Color(0xFF8B949E),
+                ),
                 Text(
                   '${suite.total} total',
                   style: const TextStyle(
@@ -238,7 +238,7 @@ class _SummaryBar extends StatelessWidget {
                 value: suite.total == 0
                     ? 0
                     : (suite.passed + suite.failed + suite.skipped) /
-                        suite.total,
+                          suite.total,
                 backgroundColor: const Color(0xFF21262D),
                 valueColor: AlwaysStoppedAnimation<Color>(
                   suite.failed > 0
@@ -306,12 +306,7 @@ class _CategoryHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(4, 16, 4, 6),
       child: Row(
         children: [
-          Expanded(
-            child: Container(
-              height: 1,
-              color: const Color(0xFF21262D),
-            ),
-          ),
+          Expanded(child: Container(height: 1, color: const Color(0xFF21262D))),
           const SizedBox(width: 10),
           Text(
             category.toUpperCase(),
@@ -332,12 +327,7 @@ class _CategoryHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              height: 1,
-              color: const Color(0xFF21262D),
-            ),
-          ),
+          Expanded(child: Container(height: 1, color: const Color(0xFF21262D))),
         ],
       ),
     );
@@ -442,8 +432,11 @@ class _StatusIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (status) {
       case TestStatus.passed:
-        return const Icon(Icons.check_circle,
-            size: 16, color: Color(0xFF3FB950));
+        return const Icon(
+          Icons.check_circle,
+          size: 16,
+          color: Color(0xFF3FB950),
+        );
       case TestStatus.failed:
         return const Icon(Icons.cancel, size: 16, color: Color(0xFFF85149));
       case TestStatus.running:
@@ -458,8 +451,11 @@ class _StatusIcon extends StatelessWidget {
       case TestStatus.skipped:
         return const Icon(Icons.skip_next, size: 16, color: Color(0xFFD29922));
       case TestStatus.pending:
-        return const Icon(Icons.radio_button_unchecked,
-            size: 16, color: Color(0xFF30363D));
+        return const Icon(
+          Icons.radio_button_unchecked,
+          size: 16,
+          color: Color(0xFF30363D),
+        );
     }
   }
 }

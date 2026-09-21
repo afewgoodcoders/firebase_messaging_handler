@@ -3,3 +3,7 @@ export 'firebase_messaging_handler_notification_service.dart';
 export 'fmh_analytics_service.dart';
 export 'storage_service.dart';
 export 'inbox_storage_service.dart';
+export 'notification_preferences_service.dart';
+export 'notification_delivery_policy_engine.dart';
+export 'notification_platform_bridge.dart';
+export 'notification_dedupe_store.dart';

@@ -66,12 +66,7 @@ void main() {
       final storage = InMemoryInboxStorage();
       final now = DateTime.now();
       await storage.upsert(
-        NotificationInboxItem(
-          id: 'x',
-          title: 'X',
-          body: 'B',
-          timestamp: now,
-        ),
+        NotificationInboxItem(id: 'x', title: 'X', body: 'B', timestamp: now),
       );
       await storage.upsert(
         NotificationInboxItem(

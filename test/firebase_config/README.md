@@ -11,12 +11,17 @@ This directory is gitignored. Never commit credentials.
 
 ## Additional setup
 
-The integration tests also need your Firebase project's **Sender ID** (the numeric
-project number, not the project name). Pass it at run-time via `--dart-define`:
+The real-push example test also needs your Firebase project's **Sender ID** (the
+numeric project number, not the project name). Run the device test from
+`example/` and pass both values via `--dart-define`:
 
 ```bash
-flutter test integration_test/real_push/real_push_test.dart \
+cd example
+BASE64=$(base64 -i ../test/firebase_config/service_account.json | tr -d '\n')
+
+flutter test integration_test/real_push_test.dart \
   --dart-define=FCM_TEST_SENDER_ID=123456789012 \
+  --dart-define=FCM_SERVICE_ACCOUNT_B64=$BASE64 \
   --device-id <device-id>
 ```
 

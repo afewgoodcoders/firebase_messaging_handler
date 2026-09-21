@@ -1,14 +1,14 @@
 name: firebase_messaging_handler
 description: "Production-ready Firebase Cloud Messaging for Flutter with a unified click stream, notification inbox, in-app messaging, diagnostics, badges, and scheduling."
-version: 1.0.6
-homepage: https://qoder.in/resources/firebase-messaging-handler
-repository: https://github.com/qoder-official/firebase_messaging_handler
-issue_tracker: https://github.com/qoder-official/firebase_messaging_handler/issues
-documentation: https://github.com/qoder-official/firebase_messaging_handler#readme
+version: 2.0.0
+homepage: https://afewgoodcoders.com
+repository: https://github.com/afewgoodcoders/firebase_messaging_handler
+issue_tracker: https://github.com/afewgoodcoders/firebase_messaging_handler/issues
+documentation: https://github.com/afewgoodcoders/firebase_messaging_handler#readme
 
 environment:
-  sdk: ">=3.5.0 <4.0.0"
-  flutter: ">=3.3.0"
+  sdk: ">=3.10.0 <4.0.0"
+  flutter: ">=3.38.1"
 
 dependencies:
   flutter:
@@ -19,10 +19,10 @@ dependencies:
   firebase_messaging: ">=16.0.4 <17.0.0"
   
   # Local notifications for scheduling and custom handling
-  flutter_local_notifications: "^21.0.0"
+  flutter_local_notifications: "^22.3.1"
 
   # Persistent storage for configuration and caching
-  shared_preferences: ">=2.0.0 <3.0.0"
+  shared_preferences: ">=2.3.0 <3.0.0"
 
   # Web platform support
   flutter_web_plugins:
@@ -61,7 +61,7 @@ flutter:
   plugin:
     platforms:
       android:
-        package: in.qoder.firebase_messaging_handler
+        package: com.afewgoodcoders.firebase_messaging_handler
         pluginClass: FirebaseMessagingHandlerPlugin
       ios:
         pluginClass: FirebaseMessagingHandlerPlugin

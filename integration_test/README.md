@@ -1,10 +1,10 @@
 # Integration Tests
 
-This repository has two integration-test surfaces:
+This repository has three automated test surfaces:
 
 | Location | Type | Device app available? | Firebase required? |
 | --- | --- | --- | --- |
-| `integration_test/handlers_integration_test.dart` | Synthetic package-root handler tests | No | No |
+| `test/handlers_integration_test.dart` | Synthetic handler integration test | No | No |
 | `example/integration_test/comprehensive_test.dart` | Example-app feature checklist | Yes | Optional for send-dependent cases |
 | `example/integration_test/real_push_test.dart` | Real FCM end-to-end tests | Yes | Yes |
 
@@ -14,10 +14,10 @@ The package root is a Flutter plugin, not an app. Device-deployable Android and 
 
 ## Synthetic Package-Root Tests
 
-`integration_test/handlers_integration_test.dart` exercises the handler pipeline with synthetic `RemoteMessage` objects. It does not deploy to Android or iOS.
+`test/handlers_integration_test.dart` exercises the handler pipeline with synthetic `RemoteMessage` objects. It is intentionally stored under `test/` so Flutter runs it on the test VM instead of trying to deploy the plugin package as an app.
 
 ```bash
-flutter test integration_test/handlers_integration_test.dart
+flutter test test/handlers_integration_test.dart
 ```
 
 Use this for fast local checks that do not require Firebase credentials, a physical device, or platform notification permissions.
@@ -63,23 +63,60 @@ flutter test integration_test/real_push_test.dart \
   --device-id <device-id>
 ```
 
-The foreground notification send is automated up to delivery. The final notification tap still requires user interaction unless a native UI automation layer is added later.
+For a wirelessly connected iOS device, use the included host driver because
+`flutter test` does not currently expose Flutter's required publish-port flag:
+
+```bash
+flutter drive \
+  --driver=test_driver/integration_test.dart \
+  --target=integration_test/real_push_test.dart \
+  --dart-define=FCM_TEST_SENDER_ID=<your-project-number> \
+  --dart-define=FCM_SERVICE_ACCOUNT_B64=$BASE64 \
+  --device-id <device-id>
+```
+
+Foreground delivery, data-only delivery, deduplication, and active-notification
+inspection are asserted inside the Flutter tests. Android notification actions,
+background data bridging, notification taps, and killed-process cold starts are
+covered by the ADB lifecycle harness below.
 
 ### Notification Permission
 
 On Android 13+, pre-grant notification permission when you want deterministic permission assertions:
 
 ```bash
-adb shell pm grant qoder.flutter.fmhexample android.permission.POST_NOTIFICATIONS || true
+adb shell pm grant com.afewgoodcoders.fmhexample android.permission.POST_NOTIFICATIONS || true
 ```
 
 If the package is not installed yet, Android may print `package not found`; the test can still install and request permission during setup.
 
 ---
 
-## Manual Cold-Start Test
+## Android Physical-Lifecycle Test
 
-Terminated-state cold-start behavior still requires manual verification because the app must be killed and relaunched by tapping a notification.
+The lifecycle harness builds a dedicated probe entrypoint, installs it under
+the Firebase test app ID, clears that probe app's test data, sends real FCM HTTP
+v1 messages, and drives the Android notification shade with ADB. It verifies:
+
+- a notification action routed through the background callback;
+- high-priority data-only delivery promoted by the default local bridge;
+- tapping the bridged notification and replaying its payload; and
+- a notification-driven cold start after the app process is killed without
+  putting the package into Android's force-stopped state.
+
+```bash
+bash test/firebase_config/android_lifecycle_e2e.sh \
+  --device <adb-device-id> \
+  --key-file test/firebase_config/service_account.json
+```
+
+The script defaults to the project ID in the service account and the Firebase
+test application ID `qoder.flutter.fmhexample`.
+
+## Manual Cold-Start Fallback
+
+Use the manual helper when notification-shade UI automation is unavailable on a
+particular Android image, or for human visual verification:
 
 ```bash
 bash test/firebase_config/terminated_state_manual.sh \

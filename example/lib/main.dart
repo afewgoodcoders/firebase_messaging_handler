@@ -24,8 +24,10 @@ void main() async {
 Future<void> exampleBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   await FirebaseMessagingHandler.handleBackgroundMessage(message);
-  debugPrint('[BackgroundHandler] Message received: '
-      '${message.messageId} | data=${message.data}');
+  debugPrint(
+    '[BackgroundHandler] Message received: '
+    '${message.messageId} | data=${message.data}',
+  );
 }
 
 class MyApp extends StatelessWidget {

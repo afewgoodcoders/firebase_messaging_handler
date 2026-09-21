@@ -18,22 +18,19 @@ class ForegroundNotificationContext {
   final Map<String, dynamic> data;
 
   /// Builds a presentation context from a foreground message.
-  ForegroundNotificationContext({
-    required this.message,
-  })  : title = message.notification?.title,
-        body = message.notification?.body,
-        data = Map<String, dynamic>.unmodifiable(message.data);
+  ForegroundNotificationContext({required this.message})
+    : title = message.notification?.title,
+      body = message.notification?.body,
+      data = Map<String, dynamic>.unmodifiable(message.data);
 }
 
 /// Web/WASM-safe Android foreground builder placeholder.
-typedef AndroidForegroundNotificationBuilder = FutureOr<Object?> Function(
-  ForegroundNotificationContext context,
-);
+typedef AndroidForegroundNotificationBuilder =
+    FutureOr<Object?> Function(ForegroundNotificationContext context);
 
 /// Web/WASM-safe iOS foreground builder placeholder.
-typedef IOSForegroundNotificationBuilder = FutureOr<Object?> Function(
-  ForegroundNotificationContext context,
-);
+typedef IOSForegroundNotificationBuilder =
+    FutureOr<Object?> Function(ForegroundNotificationContext context);
 
 /// Controls how foreground remote messages are translated into local
 /// notifications when the app is active.

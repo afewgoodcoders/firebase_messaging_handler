@@ -57,9 +57,9 @@ class IOSApnsSetupScreen extends StatelessWidget {
                   child: Text(
                     'iOS APNs Configuration Required',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade800,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade800,
+                    ),
                   ),
                 ),
               ],

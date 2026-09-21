@@ -26,14 +26,16 @@ class FcmTestSender {
   static const _scope = 'https://www.googleapis.com/auth/firebase.messaging';
 
   /// Embedded at compile time via --dart-define=FCM_SERVICE_ACCOUNT_B64=<base64>
-  static const _encodedSa =
-      String.fromEnvironment('FCM_SERVICE_ACCOUNT_B64', defaultValue: '');
+  static const _encodedSa = String.fromEnvironment(
+    'FCM_SERVICE_ACCOUNT_B64',
+    defaultValue: '',
+  );
 
   final String projectId;
   final Map<String, dynamic> _serviceAccount;
 
   FcmTestSender._({required this.projectId, required Map<String, dynamic> sa})
-      : _serviceAccount = sa;
+    : _serviceAccount = sa;
 
   /// Returns null when no credentials are available — tests self-skip.
   static FcmTestSender? fromEnv() {
@@ -58,11 +60,9 @@ class FcmTestSender {
     Map<String, String> data = const {},
   }) async {
     final creds = ServiceAccountCredentials.fromJson(_serviceAccount);
-    final client = await clientViaServiceAccount(
-      creds,
-      [_scope],
-      baseClient: http.Client(),
-    );
+    final client = await clientViaServiceAccount(creds, [
+      _scope,
+    ], baseClient: http.Client());
     try {
       final url = Uri.parse(
         'https://fcm.googleapis.com/v1/projects/$projectId/messages:send',
@@ -71,10 +71,7 @@ class FcmTestSender {
         'message': {
           'token': deviceToken,
           if (title != null || body != null)
-            'notification': {
-              if (title != null) 'title': title,
-              if (body != null) 'body': body,
-            },
+            'notification': {'title': ?title, 'body': ?body},
           if (data.isNotEmpty) 'data': data,
         },
       };
@@ -85,7 +82,8 @@ class FcmTestSender {
       );
       if (response.statusCode != 200) {
         throw Exception(
-            'FCM send failed ${response.statusCode}: ${response.body}');
+          'FCM send failed ${response.statusCode}: ${response.body}',
+        );
       }
     } finally {
       client.close();

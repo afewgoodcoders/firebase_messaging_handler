@@ -8,12 +8,14 @@ import '../../models/notification_inbox_item.dart';
 import '../interfaces/notification_inbox_storage_interface.dart';
 
 class InboxStorageService implements NotificationInboxStorageInterface {
-  InboxStorageService({SharedPreferences? preferences})
-      : _prefsFuture = preferences != null
-            ? Future<SharedPreferences>.value(preferences)
-            : SharedPreferences.getInstance();
+  InboxStorageService({SharedPreferences? preferences, int maxItems = 100})
+    : _prefsFuture = preferences != null
+          ? Future<SharedPreferences>.value(preferences)
+          : SharedPreferences.getInstance(),
+      _maxItems = maxItems;
 
   final Future<SharedPreferences> _prefsFuture;
+  final int _maxItems;
   static const int _defaultPageSize = 20;
 
   @override
@@ -28,8 +30,9 @@ class InboxStorageService implements NotificationInboxStorageInterface {
     if (start >= items.length) {
       return <NotificationInboxItem>[];
     }
-    final int end =
-        (start + safeSize) > items.length ? items.length : start + safeSize;
+    final int end = (start + safeSize) > items.length
+        ? items.length
+        : start + safeSize;
     return items.sublist(start, end);
   }
 
@@ -44,6 +47,9 @@ class InboxStorageService implements NotificationInboxStorageInterface {
       (NotificationInboxItem a, NotificationInboxItem b) =>
           b.timestamp.compareTo(a.timestamp),
     );
+    if (filtered.length > _maxItems) {
+      filtered.removeRange(_maxItems, filtered.length);
+    }
     await _writeAll(filtered);
   }
 
@@ -55,8 +61,8 @@ class InboxStorageService implements NotificationInboxStorageInterface {
     final List<NotificationInboxItem> current = await _readAll();
     final Map<String, NotificationInboxItem> merged =
         <String, NotificationInboxItem>{
-      for (final NotificationInboxItem item in current) item.id: item,
-    };
+          for (final NotificationInboxItem item in current) item.id: item,
+        };
     for (final NotificationInboxItem item in items) {
       merged[item.id] = item;
     }
@@ -65,6 +71,9 @@ class InboxStorageService implements NotificationInboxStorageInterface {
         (NotificationInboxItem a, NotificationInboxItem b) =>
             b.timestamp.compareTo(a.timestamp),
       );
+    if (ordered.length > _maxItems) {
+      ordered.removeRange(_maxItems, ordered.length);
+    }
     await _writeAll(ordered);
   }
 
@@ -76,8 +85,11 @@ class InboxStorageService implements NotificationInboxStorageInterface {
     final List<NotificationInboxItem> items = await _readAll();
     final Set<String> targetIds = ids.toSet();
     final List<NotificationInboxItem> updated = items
-        .map((NotificationInboxItem item) =>
-            targetIds.contains(item.id) ? item.copyWith(isRead: isRead) : item)
+        .map(
+          (NotificationInboxItem item) => targetIds.contains(item.id)
+              ? item.copyWith(isRead: isRead)
+              : item,
+        )
         .toList();
     await _writeAll(updated);
   }
@@ -113,15 +125,19 @@ class InboxStorageService implements NotificationInboxStorageInterface {
   Future<List<NotificationInboxItem>> _readAll() async {
     try {
       final SharedPreferences prefs = await _prefsFuture;
-      final String? stored =
-          prefs.getString(FirebaseMessagingHandlerConstants.inboxItemsPrefKey);
+      final String? stored = prefs.getString(
+        FirebaseMessagingHandlerConstants.inboxItemsPrefKey,
+      );
       if (stored == null) {
         return <NotificationInboxItem>[];
       }
       final List<dynamic> decoded = jsonDecode(stored) as List<dynamic>;
       final List<NotificationInboxItem> items = decoded
-          .map((dynamic item) => NotificationInboxItem.fromMap(
-              Map<String, dynamic>.from(item as Map)))
+          .map(
+            (dynamic item) => NotificationInboxItem.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
           .toList();
       items.sort(
         (NotificationInboxItem a, NotificationInboxItem b) =>
@@ -138,8 +154,9 @@ class InboxStorageService implements NotificationInboxStorageInterface {
   Future<void> _writeAll(List<NotificationInboxItem> items) async {
     try {
       final SharedPreferences prefs = await _prefsFuture;
-      final List<Map<String, dynamic>> encoded =
-          items.map((NotificationInboxItem item) => item.toMap()).toList();
+      final List<Map<String, dynamic>> encoded = items
+          .map((NotificationInboxItem item) => item.toMap())
+          .toList();
       await prefs.setString(
         FirebaseMessagingHandlerConstants.inboxItemsPrefKey,
         jsonEncode(encoded),
@@ -172,8 +189,9 @@ class InMemoryInboxStorage implements NotificationInboxStorageInterface {
     if (start >= _items.length) {
       return <NotificationInboxItem>[];
     }
-    final int end =
-        (start + safeSize) > _items.length ? _items.length : start + safeSize;
+    final int end = (start + safeSize) > _items.length
+        ? _items.length
+        : start + safeSize;
     return _items.sublist(start, end);
   }
 

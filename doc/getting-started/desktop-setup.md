@@ -10,7 +10,7 @@ Windows and Linux run in desktop local mode.
 ## What works
 
 - local notifications
-- scheduling
+- one-time scheduling on Windows where the upstream plugin supports it
 - notification inbox
 - quiet hours and delivery policy logic
 - in-app templates
@@ -40,7 +40,7 @@ Windows and Linux run in desktop local mode.
 1. Launch the example app on Windows or Linux.
 2. Open Notification Doctor and confirm desktop local mode is reported.
 3. Trigger a local test notification from the showcase screen.
-4. Schedule a notification and confirm it appears later.
+4. On Windows, query `getCapabilities()` and schedule only when supported.
 5. Open the inbox screen and verify local entries render correctly.
 6. Trigger an in-app template and verify presentation works.
 

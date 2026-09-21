@@ -1,17 +1,97 @@
 import '../enums/export.dart';
 
 class NotificationAction {
+  /// Stable identifier returned when the action is selected.
   final String id;
+
+  /// User-visible action label.
   final String title;
+
+  /// Marks an action that can remove data or perform another destructive task.
   final bool destructive;
+
+  /// Opens the application UI when the action is selected.
+  final bool foreground;
+
+  /// Requires the device to be unlocked before the action can run.
+  final bool requiresAuthentication;
+
+  /// Removes the notification after the action is selected.
+  final bool cancelNotification;
+
+  /// Enables inline text input for reply-style actions.
+  final bool textInput;
+
+  /// Label shown by platforms that support inline input prompts.
+  final String? inputLabel;
+
+  /// Title of the submit button for inline text input on Apple platforms.
+  final String? inputButtonTitle;
+
+  /// Suggested reply choices on Android.
+  final List<String> inputChoices;
+
+  /// Whether arbitrary text is accepted in addition to [inputChoices].
+  final bool allowFreeFormInput;
+
+  /// Optional application payload associated with the action.
   final Map<String, dynamic>? payload;
 
+  /// Creates an interactive notification action.
   const NotificationAction({
     required this.id,
     required this.title,
     this.destructive = false,
+    this.foreground = true,
+    this.requiresAuthentication = false,
+    this.cancelNotification = true,
+    this.textInput = false,
+    this.inputLabel,
+    this.inputButtonTitle,
+    this.inputChoices = const <String>[],
+    this.allowFreeFormInput = true,
     this.payload,
   });
+
+  /// Converts this action to a JSON-compatible map.
+  Map<String, dynamic> toMap() => <String, dynamic>{
+    'id': id,
+    'title': title,
+    'destructive': destructive,
+    'foreground': foreground,
+    'requiresAuthentication': requiresAuthentication,
+    'cancelNotification': cancelNotification,
+    'textInput': textInput,
+    'inputLabel': inputLabel,
+    'inputButtonTitle': inputButtonTitle,
+    'inputChoices': inputChoices,
+    'allowFreeFormInput': allowFreeFormInput,
+    'payload': payload,
+  };
+
+  /// Recreates an action from a JSON-compatible map.
+  factory NotificationAction.fromMap(Map<String, dynamic> map) {
+    return NotificationAction(
+      id: map['id']?.toString() ?? '',
+      title: map['title']?.toString() ?? '',
+      destructive: map['destructive'] == true,
+      foreground: map['foreground'] as bool? ?? true,
+      requiresAuthentication: map['requiresAuthentication'] == true,
+      cancelNotification: map['cancelNotification'] as bool? ?? true,
+      textInput: map['textInput'] == true,
+      inputLabel: map['inputLabel']?.toString(),
+      inputButtonTitle: map['inputButtonTitle']?.toString(),
+      inputChoices:
+          (map['inputChoices'] as List<dynamic>?)
+              ?.map((dynamic value) => value.toString())
+              .toList() ??
+          const <String>[],
+      allowFreeFormInput: map['allowFreeFormInput'] as bool? ?? true,
+      payload: map['payload'] is Map
+          ? Map<String, dynamic>.from(map['payload'] as Map)
+          : null,
+    );
+  }
 }
 
 class NotificationData {
@@ -108,12 +188,7 @@ class NotificationData {
       'icon': icon,
       'category': category,
       'actions': actions
-          ?.map((action) => {
-                'id': action.id,
-                'title': action.title,
-                'destructive': action.destructive,
-                'payload': action.payload,
-              })
+          ?.map((NotificationAction action) => action.toMap())
           .toList(),
       'timestamp': timestamp?.toIso8601String(),
       'type': type.toString().split('.').last, // Get enum name safely
@@ -140,18 +215,16 @@ class NotificationData {
       category: map['category'],
       actions: map['actions'] != null
           ? (map['actions'] as List<dynamic>)
-              .map((action) => NotificationAction(
-                    id: action['id'],
-                    title: action['title'],
-                    destructive: action['destructive'] ?? false,
-                    payload: action['payload'] != null
-                        ? Map<String, dynamic>.from(action['payload'])
-                        : null,
-                  ))
-              .toList()
+                .map(
+                  (dynamic action) => NotificationAction.fromMap(
+                    Map<String, dynamic>.from(action as Map),
+                  ),
+                )
+                .toList()
           : null,
-      timestamp:
-          map['timestamp'] != null ? DateTime.parse(map['timestamp']) : null,
+      timestamp: map['timestamp'] != null
+          ? DateTime.parse(map['timestamp'])
+          : null,
       type: NotificationTypeEnum.values.firstWhere(
         (type) => type.toString().split('.').last == map['type'],
         orElse: () => NotificationTypeEnum.foreground,

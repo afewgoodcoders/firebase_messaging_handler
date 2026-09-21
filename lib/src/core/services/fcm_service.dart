@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import '../interfaces/fcm_service_interface.dart';
 import '../utils/platform_utils.dart';
+import '../../models/notification_permission_options.dart';
 
 /// Firebase Cloud Messaging service implementation
 class FCMService implements FCMServiceInterface {
@@ -11,6 +12,7 @@ class FCMService implements FCMServiceInterface {
   FirebaseMessaging? _firebaseMessaging;
   bool _isInitialized = false;
   bool _loggedUnsupportedPlatform = false;
+  bool _debugLoggingEnabled = false;
 
   /// Stores the human-readable reason the last [getToken] call returned null.
   /// Callers can surface this in the UI instead of a generic "no token" message.
@@ -31,6 +33,11 @@ class FCMService implements FCMServiceInterface {
   /// The reason the last [getToken] call returned null, or null if it succeeded.
   String? get lastTokenError => _lastTokenError;
 
+  /// Enables verbose package diagnostics in debug builds.
+  void setDebugLogging(bool enabled) {
+    _debugLoggingEnabled = enabled;
+  }
+
   /// Whether Firebase Messaging is available on the current platform.
   bool get isSupportedOnCurrentPlatform => !(isWindows || isLinux);
 
@@ -38,7 +45,7 @@ class FCMService implements FCMServiceInterface {
   String? get unsupportedPlatformReason => isSupportedOnCurrentPlatform
       ? null
       : 'Firebase Cloud Messaging is not supported on $currentPlatformName. '
-          'This package remains usable for local notifications, scheduling, inbox, quiet hours, and in-app templates on desktop.';
+            'This package remains usable for local notifications, scheduling, inbox, quiet hours, and in-app templates on desktop.';
 
   @override
   Future<bool> initialize() async {
@@ -62,8 +69,10 @@ class FCMService implements FCMServiceInterface {
             'senderId=${app.options.messagingSenderId}',
           );
         } catch (_) {
-          _logMessage('[FCMService] Web: could not read Firebase app options — '
-              'ensure Firebase.initializeApp() completed before init().');
+          _logMessage(
+            '[FCMService] Web: could not read Firebase app options — '
+            'ensure Firebase.initializeApp() completed before init().',
+          );
         }
       }
       return true;
@@ -75,23 +84,17 @@ class FCMService implements FCMServiceInterface {
   }
 
   @override
-  Future<bool> requestPermissions() async {
+  Future<bool> requestPermissions({
+    NotificationPermissionOptions options =
+        const NotificationPermissionOptions(),
+  }) async {
     try {
-      if (!isSupportedOnCurrentPlatform) {
-        await initialize();
-        _logUnsupportedPlatformOnce('requestPermissions');
-        return true;
-      }
-
-      // Ensure Firebase Messaging is initialized
-      if (!_isInitialized) {
-        await initialize();
-      }
-
-      final NotificationSettings settings =
-          await _firebaseMessaging!.requestPermission();
+      final NotificationSettings settings = await requestPermissionSettings(
+        options: options,
+      );
       final bool isAuthorized =
-          settings.authorizationStatus == AuthorizationStatus.authorized;
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional;
       _logMessage('[FCMService] Permission request result: $isAuthorized');
       return isAuthorized;
     } catch (error, stack) {
@@ -99,6 +102,35 @@ class FCMService implements FCMServiceInterface {
       _logMessage('[FCMService] Stack trace: $stack');
       return false;
     }
+  }
+
+  @override
+  Future<NotificationSettings> requestPermissionSettings({
+    NotificationPermissionOptions options =
+        const NotificationPermissionOptions(),
+  }) async {
+    if (!isSupportedOnCurrentPlatform) {
+      await initialize();
+      _logUnsupportedPlatformOnce('requestPermissions');
+      return _desktopLocalModeSettings();
+    }
+
+    if (!_isInitialized) {
+      final bool initialized = await initialize();
+      if (!initialized || _firebaseMessaging == null) {
+        throw StateError('Firebase Messaging could not be initialized.');
+      }
+    }
+
+    return _firebaseMessaging!.requestPermission(
+      alert: options.alert,
+      badge: options.badge,
+      sound: options.sound,
+      provisional: options.provisional,
+      announcement: options.announcement,
+      carPlay: options.carPlay,
+      criticalAlert: options.criticalAlert,
+    );
   }
 
   @override
@@ -120,8 +152,9 @@ class FCMService implements FCMServiceInterface {
           await initialize();
         }
 
-        final String? token =
-            await _firebaseMessaging!.getToken(vapidKey: vapidKey);
+        final String? token = await _firebaseMessaging!.getToken(
+          vapidKey: vapidKey,
+        );
 
         if (token == null && isIOS) {
           // Firebase returned null without throwing — likely running on a simulator
@@ -142,7 +175,8 @@ class FCMService implements FCMServiceInterface {
         }
       } catch (error, stack) {
         _logMessage(
-            '[FCMService] Token retrieval attempt ${retryCount + 1} failed: $error');
+          '[FCMService] Token retrieval attempt ${retryCount + 1} failed: $error',
+        );
 
         // Web push subscription failed — retrying won't help, this is a project config issue.
         if (kIsWeb) {
@@ -167,7 +201,8 @@ class FCMService implements FCMServiceInterface {
 
         // APNs token not set — retrying immediately won't help; surface a clear message.
         if (isIOS && error.toString().contains('apns-token-not-set')) {
-          const String reason = 'FCM token unavailable: APNs token not set. '
+          const String reason =
+              'FCM token unavailable: APNs token not set. '
               'Upload an APNs Authentication Key (.p8) to Firebase Console → '
               'Project Settings → Cloud Messaging → iOS app → APNs Authentication Key. '
               'This is required on real iOS devices; simulators cannot receive APNs tokens.';
@@ -178,7 +213,8 @@ class FCMService implements FCMServiceInterface {
 
         if (retryCount == maxRetries) {
           _logMessage(
-              '[FCMService] Token retrieval failed after $maxRetries retries.');
+            '[FCMService] Token retrieval failed after $maxRetries retries.',
+          );
           _logMessage('[FCMService] Stack trace: $stack');
           return null;
         }
@@ -186,7 +222,8 @@ class FCMService implements FCMServiceInterface {
         // Exponential backoff: 1s, 2s, 4s
         final int delaySeconds = 1 << retryCount;
         _logMessage(
-            '[FCMService] Retrying token retrieval in ${delaySeconds}s...');
+          '[FCMService] Retrying token retrieval in ${delaySeconds}s...',
+        );
         await Future.delayed(Duration(seconds: delaySeconds));
         retryCount++;
       }
@@ -213,6 +250,7 @@ class FCMService implements FCMServiceInterface {
     } catch (error, stack) {
       _logMessage('[FCMService] Topic subscription error: $error');
       _logMessage('[FCMService] Stack trace: $stack');
+      rethrow;
     }
   }
 
@@ -235,6 +273,7 @@ class FCMService implements FCMServiceInterface {
     } catch (error, stack) {
       _logMessage('[FCMService] Topic unsubscription error: $error');
       _logMessage('[FCMService] Stack trace: $stack');
+      rethrow;
     }
   }
 
@@ -258,6 +297,7 @@ class FCMService implements FCMServiceInterface {
     } catch (error, stack) {
       _logMessage('[FCMService] Token deletion error: $error');
       _logMessage('[FCMService] Stack trace: $stack');
+      rethrow;
     }
   }
 
@@ -279,8 +319,8 @@ class FCMService implements FCMServiceInterface {
         await initialize();
       }
 
-      final RemoteMessage? message =
-          await _firebaseMessaging!.getInitialMessage();
+      final RemoteMessage? message = await _firebaseMessaging!
+          .getInitialMessage();
 
       // Cache the result (even if null)
       _cachedInitialMessage = message;
@@ -292,8 +332,8 @@ class FCMService implements FCMServiceInterface {
         try {
           // Force a small delay and try again (iOS timing issue)
           await Future.delayed(const Duration(milliseconds: 100));
-          final RemoteMessage? retryMessage =
-              await _firebaseMessaging!.getInitialMessage();
+          final RemoteMessage? retryMessage = await _firebaseMessaging!
+              .getInitialMessage();
           if (retryMessage != null) {
             // Update cache with retry result
             _cachedInitialMessage = retryMessage;
@@ -305,7 +345,8 @@ class FCMService implements FCMServiceInterface {
       }
 
       _logMessage(
-          '[FCMService] Initial message: ${message != null ? 'found' : 'none'}');
+        '[FCMService] Initial message: ${message != null ? 'found' : 'none'}',
+      );
       return message;
     } catch (error, stack) {
       _logMessage('[FCMService] Initial message error: $error');
@@ -373,7 +414,8 @@ class FCMService implements FCMServiceInterface {
 
   @override
   Future<void> setBackgroundMessageHandler(
-      Future<void> Function(RemoteMessage message) handler) async {
+    Future<void> Function(RemoteMessage message) handler,
+  ) async {
     if (!isSupportedOnCurrentPlatform) {
       await initialize();
       _logUnsupportedPlatformOnce('setBackgroundMessageHandler');
@@ -411,8 +453,20 @@ class FCMService implements FCMServiceInterface {
     }
   }
 
+  @override
+  Future<void> setDeliveryMetricsExportToBigQuery(bool enabled) async {
+    if (!isAndroid) return;
+    if (!_isInitialized) {
+      final bool initialized = await initialize();
+      if (!initialized || _firebaseMessaging == null) {
+        throw StateError('Firebase Messaging could not be initialized.');
+      }
+    }
+    await _firebaseMessaging!.setDeliveryMetricsExportToBigQuery(enabled);
+  }
+
   void _logMessage(String message) {
-    if (kDebugMode) {
+    if (kDebugMode && _debugLoggingEnabled) {
       print(message);
     }
   }

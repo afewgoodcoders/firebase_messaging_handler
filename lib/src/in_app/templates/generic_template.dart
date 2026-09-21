@@ -7,10 +7,8 @@ import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart
 import '../../models/export.dart';
 import '../presentation/template_presenter.dart';
 
-typedef InAppTemplateActionCallback = void Function(
-  String actionId,
-  InAppNotificationData data,
-);
+typedef InAppTemplateActionCallback =
+    void Function(String actionId, InAppNotificationData data);
 
 class GenericTemplateButton {
   const GenericTemplateButton({
@@ -212,19 +210,22 @@ class GenericTemplateConfig {
           final id = (item['id'] ?? item['action'])?.toString();
           final label = item['label']?.toString();
           if (id == null || label == null) continue;
-          final styleString =
-              (item['style'] ?? 'filled').toString().toLowerCase();
+          final styleString = (item['style'] ?? 'filled')
+              .toString()
+              .toLowerCase();
           final style = GenericButtonStyle.values.firstWhere(
             (s) => s.name == styleString,
             orElse: () => GenericButtonStyle.filled,
           );
-          buttons.add(GenericTemplateButton(
-            id: id,
-            label: label,
-            style: style,
-            url: _string(item, 'url') ?? _string(item, 'deepLink'),
-            dismissOnly: _bool(item, 'dismissOnly') ?? false,
-          ));
+          buttons.add(
+            GenericTemplateButton(
+              id: id,
+              label: label,
+              style: style,
+              url: _string(item, 'url') ?? _string(item, 'deepLink'),
+              dismissOnly: _bool(item, 'dismissOnly') ?? false,
+            ),
+          );
         }
       }
     }
@@ -271,7 +272,8 @@ class GenericTemplatePage {
       subtitle: GenericTemplateConfig._string(map, 'subtitle'),
       body: GenericTemplateConfig._string(map, 'body'),
       html: GenericTemplateConfig._string(map, 'html'),
-      imageUrl: GenericTemplateConfig._string(map, 'imageUrl') ??
+      imageUrl:
+          GenericTemplateConfig._string(map, 'imageUrl') ??
           GenericTemplateConfig._string(map, 'image'),
       backgroundColor: GenericTemplateConfig._color(map['backgroundColor']),
       textColor: GenericTemplateConfig._color(map['textColor']),
@@ -369,11 +371,8 @@ class BuiltInInAppTemplates {
                 child: FadeTransition(opacity: animation, child: child),
               );
             },
-            builder: (context) => _DialogTemplate(
-              config: config,
-              data: data,
-              onAction: onAction,
-            ),
+            builder: (context) =>
+                _DialogTemplate(config: config, data: data, onAction: onAction),
           );
           break;
       }
@@ -638,8 +637,10 @@ class _CarouselTemplateState extends State<_CarouselTemplate> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context).size;
-    final double width =
-        min<double>(520.0, media.width * widget.config.widthFactor);
+    final double width = min<double>(
+      520.0,
+      media.width * widget.config.widthFactor,
+    );
     final double heightFactor;
     if (widget.config.heightFactor > 0) {
       final num clamped = widget.config.heightFactor.clamp(0.4, 0.9);
@@ -750,10 +751,7 @@ class _BannerTemplate extends StatelessWidget {
       ),
     );
 
-    return IgnorePointer(
-      ignoring: false,
-      child: banner,
-    );
+    return IgnorePointer(ignoring: false, child: banner);
   }
 }
 
@@ -785,10 +783,10 @@ class _BannerContent extends StatelessWidget {
           title,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: textColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
+            color: textColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
       );
       children.add(const SizedBox(height: 8));
@@ -801,9 +799,9 @@ class _BannerContent extends StatelessWidget {
           body,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: textColor.withValues(alpha: 0.9),
-                fontSize: 14,
-              ),
+            color: textColor.withValues(alpha: 0.9),
+            fontSize: 14,
+          ),
         ),
       );
       children.add(const SizedBox(height: 16));
@@ -821,14 +819,13 @@ class _BannerContent extends StatelessWidget {
       );
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: children,
-    );
+    return Column(mainAxisSize: MainAxisSize.min, children: children);
   }
 
   Widget _buildBannerButton(
-      BuildContext context, GenericTemplateButton button) {
+    BuildContext context,
+    GenericTemplateButton button,
+  ) {
     void handlePressed() {
       onDismiss();
       if (!button.dismissOnly) {
@@ -846,8 +843,9 @@ class _BannerContent extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             side: BorderSide(color: textColor.withValues(alpha: 0.3)),
             foregroundColor: textColor,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
           child: Text(button.label),
         );
@@ -879,8 +877,9 @@ class _BannerContent extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             backgroundColor: textColor,
             foregroundColor: config.backgroundColor,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
           child: Text(button.label),
         );
@@ -916,26 +915,31 @@ class _TemplateContent extends StatelessWidget {
     final subtitle = page?.subtitle ?? config.subtitle;
     final html = page?.html ?? config.html;
     final body = page?.body ?? config.body;
-    final buttons =
-        (page?.buttons.isNotEmpty ?? false) ? page!.buttons : config.buttons;
+    final buttons = (page?.buttons.isNotEmpty ?? false)
+        ? page!.buttons
+        : config.buttons;
 
     if (imageUrl != null) {
-      children.add(ClipRRect(
-        borderRadius: BorderRadius.circular(config.cornerRadius - 4),
-        child: AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Image.network(
-            imageUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => Container(
-              color: Colors.white.withValues(alpha: 0.1),
-              alignment: Alignment.center,
-              child:
-                  const Icon(Icons.image_not_supported, color: Colors.white70),
+      children.add(
+        ClipRRect(
+          borderRadius: BorderRadius.circular(config.cornerRadius - 4),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                color: Colors.white.withValues(alpha: 0.1),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.image_not_supported,
+                  color: Colors.white70,
+                ),
+              ),
             ),
           ),
         ),
-      ));
+      );
       children.add(const SizedBox(height: 16));
     }
 
@@ -944,24 +948,25 @@ class _TemplateContent extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(color: textColor, fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       );
       children.add(const SizedBox(height: 12));
     }
 
     if (subtitle != null) {
-      children.add(Text(
-        subtitle,
-        textAlign: TextAlign.center,
-        style: Theme.of(context)
-            .textTheme
-            .titleMedium
-            ?.copyWith(color: textColor.withValues(alpha: 0.85)),
-      ));
+      children.add(
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: textColor.withValues(alpha: 0.85),
+          ),
+        ),
+      );
       children.add(const SizedBox(height: 12));
     }
 
@@ -973,14 +978,15 @@ class _TemplateContent extends StatelessWidget {
         ),
       );
     } else if (body != null) {
-      children.add(Text(
-        body,
-        textAlign: TextAlign.center,
-        style: Theme.of(context)
-            .textTheme
-            .bodyMedium
-            ?.copyWith(color: textColor.withValues(alpha: 0.9)),
-      ));
+      children.add(
+        Text(
+          body,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: textColor.withValues(alpha: 0.9),
+          ),
+        ),
+      );
     }
 
     if (body != null || html != null) {
@@ -988,25 +994,24 @@ class _TemplateContent extends StatelessWidget {
     }
 
     if (buttons.isNotEmpty) {
-      final buttonWidgets =
-          buttons.map((button) => _buildButton(context, button)).toList();
+      final buttonWidgets = buttons
+          .map((button) => _buildButton(context, button))
+          .toList();
 
       if (isCompact) {
-        children.add(Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: buttonWidgets,
-        ));
+        children.add(Wrap(spacing: 8, runSpacing: 8, children: buttonWidgets));
       } else {
-        children.add(Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (int i = 0; i < buttonWidgets.length; i++) ...[
-              buttonWidgets[i],
-              if (i < buttonWidgets.length - 1) const SizedBox(height: 16),
+        children.add(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < buttonWidgets.length; i++) ...[
+                buttonWidgets[i],
+                if (i < buttonWidgets.length - 1) const SizedBox(height: 16),
+              ],
             ],
-          ],
-        ));
+          ),
+        );
       }
     }
 

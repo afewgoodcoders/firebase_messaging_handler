@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0]
+
+### Added
+
+- Versioned notification envelope v2 with validation, expiration, commands, collapse/deduplication keys, localization, actions, and string-only FCM encoding
+- Durable idempotency, topic state, policy counters, background interactions, and configurable runtime state storage
+- Fine-grained permission requests, explicit token synchronization, runtime capability reporting, and typed operation results
+- Action categories, background actions, inline replies, dismiss events, grouped/threaded notifications, and native presentation-detail escape hatches
+- Exact/inexact Android schedule modes, exact-alarm capability checks, active/pending notification inspection, and Android channel deletion/status APIs
+- Web service-worker template with rich presentation, commands, click/action/close bridging, and reinitializable stream lifecycle
+- Explicit `client` versus `system` remote presentation, with data-only policy control or OS-rendered background reliability
+- Web parity for action notifications, inbox persistence, in-app routing, and silent commands
+- Explicit background-isolate bootstrap and Linux/Windows native notification-detail overrides
+- Privacy-preserving analytics modes and opt-in Android FCM delivery-metrics export
+- Native iOS badge bridge and Windows toast identity configuration
+- Reference TypeScript server package with HTTP v1 encoding, retry/backoff, token registry, stale-token cleanup, scheduling, idempotency, DLQ, authorization/App Check boundary, and audit events
+- JSON Schema, migration guide, platform capability matrix, and production deployment documentation
+
+### Changed
+
+- `initialize(FCMConfiguration)` no longer prompts for permission or creates a token unless explicitly configured
+- Provisional Apple authorization is treated as usable, and denied permission no longer makes package initialization fail
+- Foreground Apple delivery is rendered once through the package pipeline; schedule acceptance emits `scheduled` rather than `delivered`
+- Data-only actions are normalized from the JSON strings required by FCM HTTP v1
+- Token deletion and topic unsubscription are independent; topic failures now propagate to callers
+- Debug logging is opt-in and analytics excludes content and raw tokens by default
+- Package, iOS podspec, examples, and documentation now target the 2.0.0 contract
+
+### Fixed
+
+- Configuration fields that were previously accepted but not wired into runtime behavior
+- Listener leaks, dispose-time notification cancellation, null-message deduplication collisions, unbounded history, and non-durable frequency limits
+- iOS foreground suppression, action-category registration, inline reply propagation, group/thread identifiers, stable notification IDs, and truthful badge support
+- Silent success results for unsupported web/local operations and failed presentation attempts
+
+### Breaking
+
+- Safe initialization defaults require applications to call `requestNotificationPermission()` and `synchronizeToken()` at an appropriate user-driven point
+- Pending-notification inspection now returns `List<PendingNotificationSnapshot>` instead of an untyped list
+- Action, grouping, and threading presentation helpers now return `Future<bool>` so unsupported or failed operations are observable
+- Debug logging defaults to disabled; enable `FCMConfiguration.enableDebugLogging` during development when needed
+- See `doc/v2-migration.md` for the complete migration checklist
+
+## [1.0.7]
+
+### Added
+- **One-call initialization** — added `FirebaseMessagingHandler.initialize(FCMConfiguration)` with smart Android channel and icon defaults
+- **Notification control plane** — added typed categories, persisted user preferences, quiet hours, frequency limits, and daily caps across package-managed delivery surfaces
+- **Preference center** — added an embeddable Flutter preferences widget with category, sound, badge, quiet-hours, and system-settings controls
+- **Typed delivery events** — added a single stream for received, delivered, suppressed, deferred, opened, and action outcomes
+- **Policy coverage** — added unit and widget tests for delivery decisions, preference persistence, and preference-center interactions
+
+### Changed
+- **Current local-notification support** — upgraded `flutter_local_notifications` to `^22.3.1` so the package supports the latest stable dependency release
+- **Supported Android toolchain** — aligned the plugin and example with Android API 24, Android `compileSdk` 36, AGP 8.11.1, Kotlin 2.2.20, and Gradle 8.14.5
+- **Project identity** — updated package metadata, support links, native identifiers, and example-app identifiers for A Few Good Coders and the `afewgoodcoders/firebase_messaging_handler` repository
+- **Current Dart formatting** — normalized Dart sources with the formatter used by the current pub.dev analysis toolchain
+
+### Fixed
+- **Synthetic handler test** — moved the non-device handler harness under `test/` so Flutter runs it on the test VM instead of trying to deploy the plugin package as an app
+
+---
+
 ## [1.0.6]
 
 ### Added

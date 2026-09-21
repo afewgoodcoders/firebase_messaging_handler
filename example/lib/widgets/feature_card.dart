@@ -22,9 +22,7 @@ class FeatureCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -46,11 +44,7 @@ class FeatureCard extends StatelessWidget {
                       color: color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(
-                      icon,
-                      size: 24,
-                      color: color,
-                    ),
+                    child: Icon(icon, size: 24, color: color),
                   ),
                   const Spacer(),
                   if (onInfoTap != null)

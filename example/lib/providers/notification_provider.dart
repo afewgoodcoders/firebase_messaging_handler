@@ -7,8 +7,8 @@ class ActivityLogEntry {
   ActivityLogEntry(this.label) : timestamp = DateTime.now();
 
   ActivityLogEntry.fromMap(Map<String, dynamic> map)
-      : label = map['label'],
-        timestamp = DateTime.parse(map['timestamp']);
+    : label = map['label'],
+      timestamp = DateTime.parse(map['timestamp']);
 
   final String label;
   final DateTime timestamp;

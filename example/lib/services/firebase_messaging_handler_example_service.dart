@@ -26,63 +26,84 @@ class FirebaseMessagingHandlerExampleService {
   final InAppMessageManager _inAppMessageManager = InAppMessageManager.instance;
 
   FirebaseMessagingHandlerExampleService(
-      this._notificationProvider, this._navigatorKey);
+    this._notificationProvider,
+    this._navigatorKey,
+  );
 
   Future<void> initialize() async {
     try {
-      // Initialize with notification channels using the new architecture
-      final Stream<NotificationData?>? clickStream =
-          await _messagingHandler.init(
-        androidChannelList: [
-          NotificationChannelData(
-            id: 'default_channel',
-            name: 'Default Notifications',
-            description: 'Default notification channel',
-            importance: NotificationImportanceEnum.high,
-            priority: NotificationPriorityEnum.high,
-            playSound: true,
-            enableVibration: true,
-            enableLights: true,
+      // Initialize channels, preferences, policy, analytics, and token handling
+      // from one immutable configuration.
+      final Stream<NotificationData?>?
+      clickStream = await _messagingHandler.initialize(
+        FCMConfiguration(
+          senderId: DefaultFirebaseOptions.currentPlatform.messagingSenderId,
+          androidChannels: <NotificationChannelData>[
+            NotificationChannelData(
+              id: 'default_channel',
+              name: 'Default Notifications',
+              description: 'Default notification channel',
+              importance: NotificationImportanceEnum.high,
+              priority: NotificationPriorityEnum.high,
+              playSound: true,
+              enableVibration: true,
+              enableLights: true,
+            ),
+            NotificationChannelData(
+              id: 'actions_channel',
+              name: 'Action Notifications',
+              description: 'Notifications with interactive buttons',
+              importance: NotificationImportanceEnum.max,
+              priority: NotificationPriorityEnum.max,
+              playSound: true,
+              enableVibration: true,
+              enableLights: true,
+            ),
+            NotificationChannelData(
+              id: 'scheduled_channel',
+              name: 'Scheduled Notifications',
+              description: 'Scheduled notification channel',
+              importance: NotificationImportanceEnum.high,
+              priority: NotificationPriorityEnum.high,
+              playSound: true,
+              enableVibration: false,
+            ),
+          ],
+          androidNotificationIconPath: '@drawable/ic_notification',
+          // Web: pass your VAPID key from Firebase Console → Project Settings →
+          // Cloud Messaging → Web Push certificates → Key pair.
+          // null uses the project's default key pair (works for most setups).
+          webVapidKey: kIsWeb ? null : null,
+          notificationCategories: const <NotificationCategory>[
+            NotificationCategory(
+              id: 'orders',
+              name: 'Order updates',
+              description: 'Shipping and delivery alerts',
+            ),
+            NotificationCategory(
+              id: 'promotion',
+              name: 'Promotions',
+              defaultEnabled: false,
+            ),
+            NotificationCategory(id: 'message', name: 'Messages'),
+          ],
+          deliveryPolicy: const NotificationDeliveryPolicy(
+            perCategoryDailyCap: 50,
           ),
-          NotificationChannelData(
-            id: 'actions_channel',
-            name: 'Action Notifications',
-            description: 'Notifications with interactive buttons',
-            importance: NotificationImportanceEnum.max,
-            priority: NotificationPriorityEnum.max,
-            playSound: true,
-            enableVibration: true,
-            enableLights: true,
-          ),
-          NotificationChannelData(
-            id: 'scheduled_channel',
-            name: 'Scheduled Notifications',
-            description: 'Scheduled notification channel',
-            importance: NotificationImportanceEnum.high,
-            priority: NotificationPriorityEnum.high,
-            playSound: true,
-            enableVibration: false,
-          ),
-        ],
-        androidNotificationIconPath: '@drawable/ic_notification',
-        senderId: DefaultFirebaseOptions.currentPlatform.messagingSenderId,
-        // Web: pass your VAPID key from Firebase Console → Project Settings →
-        // Cloud Messaging → Web Push certificates → Key pair.
-        // null uses the project's default key pair (works for most setups).
-        webVapidKey: kIsWeb ? null : null,
-        updateTokenCallback: (String fcmToken) async {
-          debugPrint('FCM Token: $fcmToken');
-          _notificationProvider.setFcmToken(fcmToken);
+          updateTokenCallback: (String fcmToken) async {
+            debugPrint('FCM Token: $fcmToken');
+            _notificationProvider.setFcmToken(fcmToken);
 
-          // In a real app, send this token to your backend
-          // For demo purposes, we'll just print it
-          return true;
-        },
+            // In a real app, send this token to your backend.
+            return true;
+          },
+          analyticsCallback: (String event, Map<String, dynamic> data) {
+            debugPrint('Analytics Event: $event - $data');
+          },
+        ),
       );
 
-      await _messagingHandler.setUnifiedMessageHandler(
-        _handleUnifiedMessage,
-      );
+      await _messagingHandler.setUnifiedMessageHandler(_handleUnifiedMessage);
 
       // Listen to notification clicks
       clickStream?.listen((NotificationData? data) {
@@ -91,11 +112,13 @@ class FirebaseMessagingHandlerExampleService {
         }
       });
 
-      // Set up analytics callback using the new architecture
-      _messagingHandler.setAnalyticsCallback((event, data) {
-        debugPrint('Analytics Event: $event - $data');
-        // In a real app, you would send this to your analytics service
-        // Examples: Firebase Analytics, Mixpanel, Amplitude, etc.
+      _messagingHandler.deliveryEvents.listen((
+        NotificationDeliveryEvent event,
+      ) {
+        _notificationProvider.addActivity(
+          '${event.type.name}: ${event.messageId}'
+          '${event.reason == null ? '' : ' (${event.reason})'}',
+        );
       });
 
       _notificationProvider.setInitialized(true);
@@ -111,13 +134,14 @@ class FirebaseMessagingHandlerExampleService {
         ),
       );
 
-      await _messagingHandler.configureBackgroundProcessingCallback(
-        (RemoteMessage message) async {
-          _notificationProvider.addActivity(
-              'Background callback processed ${message.messageId ?? 'unknown'}');
-          return true;
-        },
-      );
+      await _messagingHandler.configureBackgroundProcessingCallback((
+        RemoteMessage message,
+      ) async {
+        _notificationProvider.addActivity(
+          'Background callback processed ${message.messageId ?? 'unknown'}',
+        );
+        return true;
+      });
 
       _messagingHandler.enableDefaultDataOnlyBridge(
         channelId: 'actions_channel',
@@ -411,25 +435,32 @@ class FirebaseMessagingHandlerExampleService {
   Future<void> triggerDataOnlyBridge() async {
     final RemoteMessage mockMessage =
         FirebaseMessagingHandler.createMockRemoteMessage(
-      messageId: 'data_bridge_${DateTime.now().millisecondsSinceEpoch}',
-      data: {
-        'title': 'Data-only Promotion',
-        'body': 'This data payload was promoted to a local notification.',
-        'deep_link': 'app://notifications/data-only',
-      },
-    );
+          messageId: 'data_bridge_${DateTime.now().millisecondsSinceEpoch}',
+          data: {
+            'title': 'Data-only Promotion',
+            'body': 'This data payload was promoted to a local notification.',
+            'deep_link': 'app://notifications/data-only',
+          },
+        );
 
     await FirebaseMessagingHandler.handleBackgroundMessage(mockMessage);
     _notificationProvider.addActivity(
-        'Triggered data-only message bridge and local notification');
+      'Triggered data-only message bridge and local notification',
+    );
   }
 
   Future<void> updateBadges() async {
+    final NotificationCapabilities capabilities = await _messagingHandler
+        .getCapabilities();
+    if (!capabilities.supports(NotificationCapability.appIconBadge)) {
+      _notificationProvider.addActivity(
+        'App-icon badge mutation is unsupported on this platform',
+      );
+      return;
+    }
     await _messagingHandler.setIOSBadgeCount(5);
-    await _messagingHandler.setAndroidBadgeCount(3);
     _notificationProvider.setIOSBadgeCount(5);
-    _notificationProvider.setAndroidBadgeCount(3);
-    _notificationProvider.addActivity('Updated badge counts');
+    _notificationProvider.addActivity('Updated the supported app-icon badge');
   }
 
   Future<void> clearAllNotifications() async {
@@ -455,11 +486,11 @@ class FirebaseMessagingHandlerExampleService {
           'id': 'dismiss',
           'label': 'Not now',
           'style': 'text',
-          'dismissOnly': true
-        }
+          'dismissOnly': true,
+        },
       ],
       'blurSigma': 12,
-      'barrierColor': '#22000000'
+      'barrierColor': '#22000000',
     };
 
     final data = InAppNotificationData(
@@ -471,16 +502,14 @@ class FirebaseMessagingHandlerExampleService {
         'source': 'example_demo',
         'campaign': 'showcase_feature_announcement',
       },
-      rawPayload: {
-        'templateId': 'builtin_generic',
-        'content': content,
-      },
+      rawPayload: {'templateId': 'builtin_generic', 'content': content},
       receivedAt: now,
     );
 
     await _inAppMessageManager.triggerInAppNotification(data);
-    _notificationProvider
-        .addActivity('Triggered feature announcement template');
+    _notificationProvider.addActivity(
+      'Triggered feature announcement template',
+    );
   }
 
   Future<void> triggerUserFeedbackDemo() async {
@@ -493,8 +522,8 @@ class FirebaseMessagingHandlerExampleService {
         {'id': 'rate_5', 'label': '⭐⭐⭐⭐⭐', 'style': 'filled'},
         {'id': 'rate_4', 'label': '⭐⭐⭐⭐', 'style': 'outlined'},
         {'id': 'rate_3', 'label': '⭐⭐⭐', 'style': 'outlined'},
-        {'id': 'skip', 'label': 'Skip', 'style': 'text', 'dismissOnly': true}
-      ]
+        {'id': 'skip', 'label': 'Skip', 'style': 'text', 'dismissOnly': true},
+      ],
     };
 
     final data = InAppNotificationData(
@@ -506,10 +535,7 @@ class FirebaseMessagingHandlerExampleService {
         'source': 'example_demo',
         'campaign': 'showcase_user_feedback',
       },
-      rawPayload: {
-        'templateId': 'builtin_generic',
-        'content': content,
-      },
+      rawPayload: {'templateId': 'builtin_generic', 'content': content},
       receivedAt: now,
     );
 
@@ -526,8 +552,9 @@ class FirebaseMessagingHandlerExampleService {
       final decoded = jsonDecode(source) as Map<String, dynamic>;
       final data = _mapToInAppData(decoded);
       await _inAppMessageManager.triggerInAppNotification(data);
-      _notificationProvider
-          .addActivity('Triggered ${data.templateId} template manually');
+      _notificationProvider.addActivity(
+        'Triggered ${data.templateId} template manually',
+      );
     } catch (error, stack) {
       debugPrint('Error triggering template: $error');
       debugPrint('$stack');
@@ -539,7 +566,8 @@ class FirebaseMessagingHandlerExampleService {
     if (map.containsKey('message')) {
       // FCM message format
       final data = Map<String, dynamic>.from(
-          map['message']['data'] as Map? ?? <String, dynamic>{});
+        map['message']['data'] as Map? ?? <String, dynamic>{},
+      );
       if (data.containsKey('fcmh_inapp')) {
         final payloadString = data['fcmh_inapp'] as String;
         try {
@@ -553,25 +581,30 @@ class FirebaseMessagingHandlerExampleService {
     }
 
     final content = Map<String, dynamic>.from(
-        map['content'] as Map? ?? <String, dynamic>{});
+      map['content'] as Map? ?? <String, dynamic>{},
+    );
     final analytics = Map<String, dynamic>.from(
-        map['analytics'] as Map? ?? <String, dynamic>{});
+      map['analytics'] as Map? ?? <String, dynamic>{},
+    );
     final rawPayload = Map<String, dynamic>.from(
-        map['rawPayload'] as Map? ?? <String, dynamic>{});
+      map['rawPayload'] as Map? ?? <String, dynamic>{},
+    );
 
     final triggerString = (map['trigger'] ?? map['triggerType']) as String?;
     final trigger = InAppTriggerTypeEnum.fromString(triggerString);
 
-    final id = (map['id'] ??
-            map['messageId'] ??
-            'template_${DateTime.now().millisecondsSinceEpoch}')
-        .toString();
+    final id =
+        (map['id'] ??
+                map['messageId'] ??
+                'template_${DateTime.now().millisecondsSinceEpoch}')
+            .toString();
     final templateId =
         (map['templateId'] ?? map['template'] ?? 'builtin_generic').toString();
 
     final receivedAtString = map['receivedAt'] as String?;
-    final receivedAt =
-        receivedAtString != null ? DateTime.tryParse(receivedAtString) : null;
+    final receivedAt = receivedAtString != null
+        ? DateTime.tryParse(receivedAtString)
+        : null;
 
     return InAppNotificationData(
       id: id,

@@ -11,10 +11,15 @@ let package = Package(
     products: [
         .library(name: "firebase-messaging-handler", targets: ["firebase_messaging_handler"]),
     ],
+    dependencies: [
+        .package(name: "FlutterFramework", path: "../FlutterFramework"),
+    ],
     targets: [
         .target(
             name: "firebase_messaging_handler",
-            dependencies: [],
+            dependencies: [
+                .product(name: "FlutterFramework", package: "FlutterFramework"),
+            ],
             path: "Classes"
         ),
     ]

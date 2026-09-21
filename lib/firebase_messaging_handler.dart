@@ -1,8 +1,14 @@
 import 'dart:async';
 import 'src/export.dart';
-import 'src/core/managers/notification_manager.dart';
 import 'src/core/services/permission_wizard_service.dart';
+import 'src/core/managers/notification_manager.dart';
+import 'src/core/managers/notification_preferences_controller.dart';
+import 'src/core/services/notification_delivery_policy_engine.dart';
+import 'src/core/services/notification_preferences_service.dart';
+import 'src/core/interfaces/notification_state_store.dart';
+import 'src/core/configuration/fcm_configuration.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/widgets.dart';
 export 'src/enums/export.dart';
 export 'src/models/export.dart';
@@ -13,6 +19,13 @@ export 'src/core/interfaces/notification_inbox_storage_interface.dart';
 export 'src/core/utils/bridging_payload_validator.dart';
 export 'src/in_app/export.dart';
 export 'src/inbox/export.dart';
+export 'src/preferences/export.dart';
+export 'src/core/configuration/export.dart';
+export 'src/core/interfaces/notification_preferences_repository.dart';
+export 'src/core/interfaces/notification_state_store.dart';
+export 'src/core/managers/notification_preferences_controller.dart';
+export 'src/core/services/notification_preferences_service.dart';
+export 'src/core/services/notification_delivery_policy_engine.dart';
 
 // Platform registration stubs — exported so Flutter's generated
 // dart_plugin_registrant.dart can resolve them via the main library import.
@@ -21,12 +34,15 @@ export 'firebase_messaging_handler_linux.dart';
 export 'firebase_messaging_handler_windows.dart';
 
 @pragma('vm:entry-point')
-
 /// Default background dispatcher entry point that forwards work into the
 /// package-managed background handler pipeline.
 Future<void> firebaseMessagingHandlerBackgroundDispatcher(
-    RemoteMessage message) async {
+  RemoteMessage message,
+) async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp();
+  }
   await FirebaseMessagingHandler.handleBackgroundMessage(message);
 }
 
@@ -52,6 +68,10 @@ class FirebaseMessagingHandler {
 
   // Core manager for notification operations
   final NotificationManager _notificationManager = NotificationManager.instance;
+  final StreamController<NotificationDeliveryEvent> _deliveryEventController =
+      StreamController<NotificationDeliveryEvent>.broadcast();
+  NotificationPreferencesController? _preferencesController;
+  NotificationDeliveryPolicyEngine? _deliveryPolicyEngine;
 
   static bool _testModeEnabled = false;
   static StreamController<RemoteMessage>? _mockRemoteMessageController;
@@ -76,14 +96,97 @@ class FirebaseMessagingHandler {
     final Future<bool> Function(String fcmToken)? updateTokenCallback,
     final bool includeInitialNotificationInStream = true,
   }) async {
-    return await _notificationManager.initialize(
-      senderId: senderId,
-      androidChannels: androidChannelList,
-      androidNotificationIconPath: androidNotificationIconPath,
-      updateTokenCallback: updateTokenCallback,
-      includeInitialNotificationInStream: includeInitialNotificationInStream,
-      webVapidKey: webVapidKey,
+    return initialize(
+      FCMConfiguration(
+        senderId: senderId,
+        androidChannels: androidChannelList,
+        androidNotificationIconPath: androidNotificationIconPath,
+        updateTokenCallback: updateTokenCallback,
+        includeInitialNotificationInStream: includeInitialNotificationInStream,
+        webVapidKey: webVapidKey,
+        requestPermissionOnInitialize: true,
+        synchronizeTokenOnInitialize: true,
+      ),
     );
+  }
+
+  /// Initializes every package subsystem from one immutable configuration.
+  ///
+  /// Android apps may omit channels to use the built-in high-importance
+  /// `default_channel`. The default icon is `@mipmap/ic_launcher`.
+  Future<Stream<NotificationData?>?> initialize(
+    FCMConfiguration configuration,
+  ) async {
+    if (!configuration.isValid) {
+      throw ArgumentError.value(
+        configuration,
+        'configuration',
+        configuration.validationErrors.join('; '),
+      );
+    }
+
+    final NotificationPreferencesController preferencesController =
+        NotificationPreferencesController(
+          repository:
+              configuration.preferencesRepository ??
+              SharedPreferencesNotificationPreferencesRepository(),
+          categories: configuration.notificationCategories,
+          openSystemSettings: _notificationManager.openNotificationSettings,
+        );
+    await preferencesController.load();
+    _preferencesController = preferencesController;
+
+    final NotificationDeliveryPolicyEngine deliveryPolicyEngine =
+        NotificationDeliveryPolicyEngine(
+          preferencesController: preferencesController,
+          policy: configuration.deliveryPolicy,
+          stateStore:
+              configuration.stateStore ??
+              SharedPreferencesNotificationStateStore(),
+        );
+    await deliveryPolicyEngine.restore();
+    _deliveryPolicyEngine = deliveryPolicyEngine;
+    _notificationManager.configureDeliveryControls(
+      deliveryPolicyEngine,
+      _deliveryEventController.add,
+    );
+    if (configuration.analyticsCallback != null) {
+      _notificationManager.setAnalyticsCallback(
+        configuration.analyticsCallback!,
+      );
+    }
+
+    return _notificationManager.initialize(configuration);
+  }
+
+  /// Live preferences used by the delivery engine and preference-center UI.
+  ///
+  /// Call [initialize] before reading this value.
+  NotificationPreferencesController get notificationPreferences {
+    final NotificationPreferencesController? controller =
+        _preferencesController;
+    if (controller == null) {
+      throw StateError('Call initialize() before reading preferences.');
+    }
+    return controller;
+  }
+
+  /// Typed events for receipt, delivery, suppression, interaction, and errors.
+  Stream<NotificationDeliveryEvent> get deliveryEvents =>
+      _deliveryEventController.stream;
+
+  /// Opens this app's notification settings when supported by the platform.
+  Future<bool> openNotificationSettings() =>
+      _notificationManager.openNotificationSettings();
+
+  /// Returns a truthful runtime capability matrix for the current platform.
+  Future<NotificationCapabilities> getCapabilities() {
+    return _notificationManager.getCapabilities();
+  }
+
+  /// Requests Android exact-alarm access for exact scheduled notifications.
+  Future<bool> requestExactAlarmPermission() {
+    return _notificationManager.requestExactAlarmPermission();
   }
 
   /// Gets the initial notification data if the app was launched from a notification.
@@ -109,14 +212,32 @@ class FirebaseMessagingHandler {
   /// This method should be called when the app is being disposed to clean up
   /// resources and prevent memory leaks.
   Future<void> dispose() async {
+    await _deliveryPolicyEngine?.flush();
     await _notificationManager.dispose();
   }
 
   /// Removes the stored FCM token.
   ///
-  /// This will unsubscribe the device from all topics and clear the local token.
+  /// This deletes the current Firebase registration token and its local cache.
   Future<void> clearToken() async {
     await _notificationManager.clearToken();
+  }
+
+  /// Requests notification permission using explicit, fine-grained options.
+  ///
+  /// Call this from a user gesture on web. Provisional Apple authorization is
+  /// returned as a successful, usable permission state.
+  Future<NotificationSettings> requestNotificationPermission({
+    NotificationPermissionOptions options =
+        const NotificationPermissionOptions(),
+  }) {
+    return _notificationManager.requestNotificationPermission(options);
+  }
+
+  /// Fetches the current FCM token and invokes the configured synchronization
+  /// callback. Set [force] to re-upload an unchanged token.
+  Future<bool> synchronizeToken({bool force = true}) {
+    return _notificationManager.synchronizeToken(force: force);
   }
 
   /// Subscribes the device to the specified FCM topic.
@@ -134,12 +255,17 @@ class FirebaseMessagingHandler {
     await _notificationManager.unsubscribeFromTopic(topic);
   }
 
-  /// Unsubscribes the device from all FCM topics and clears the token.
+  /// Unsubscribes the device from every topic tracked by this package.
   ///
-  /// This will stop the device from receiving all topic-based messages and
-  /// clear the FCM token, effectively disabling all push notifications.
+  /// Direct token-targeted push remains enabled. Call [clearToken] separately
+  /// when signing out or intentionally rotating the installation token.
   Future<void> unsubscribeFromAllTopics() async {
     await _notificationManager.unsubscribeFromAllTopics();
+  }
+
+  /// Returns topics successfully subscribed through this package.
+  Future<List<String>> getSubscribedTopics() {
+    return _notificationManager.getSubscribedTopics();
   }
 
   /// Sets the badge count for iOS notifications.
@@ -159,23 +285,25 @@ class FirebaseMessagingHandler {
 
   /// Sets the badge count for Android notifications.
   ///
-  /// Android badge support varies by device manufacturer and launcher.
-  /// This method provides a consistent interface across platforms.
+  /// Retained for source compatibility. The package does not currently expose
+  /// a reliable Android launcher-badge mutation bridge, so query
+  /// [getCapabilities] before offering this control.
   Future<void> setAndroidBadgeCount(int count) async {
     await _notificationManager.setAndroidBadgeCount(count);
   }
 
   /// Gets the current badge count for Android notifications.
   ///
-  /// Returns the current badge count if supported by the device.
+  /// Returns null unless the current Android runtime reports direct badge
+  /// mutation support.
   Future<int?> getAndroidBadgeCount() async {
     return await _notificationManager.getAndroidBadgeCount();
   }
 
-  /// Clears the badge count for both platforms.
+  /// Clears the badge count when the current platform supports direct badge
+  /// mutation.
   ///
-  /// This will remove the badge indicator from the app icon on both
-  /// iOS and Android devices.
+  /// Currently this is implemented by the package's iOS native bridge.
   Future<void> clearBadgeCount() async {
     await _notificationManager.clearBadgeCount();
   }
@@ -220,7 +348,7 @@ class FirebaseMessagingHandler {
   /// infrastructure so widget and integration tests can drive notification
   /// flows without a Firebase project or physical device.
   ///
-  /// Call `setTestMode(false)` in [tearDown] to clean up stream controllers.
+  /// Call `setTestMode(false)` in `tearDown` to clean up stream controllers.
   @visibleForTesting
   static void setTestMode(bool enabled) {
     if (_testModeEnabled == enabled) {
@@ -255,12 +383,15 @@ class FirebaseMessagingHandler {
   static void addMockNotification(RemoteMessage message) {
     if (!_testModeEnabled) {
       throw StateError(
-          'Test mode is not enabled. Call setTestMode(true) before adding mock notifications.');
+        'Test mode is not enabled. Call setTestMode(true) before adding mock notifications.',
+      );
     }
 
     _mockRemoteMessageController?.add(message);
-    unawaited(FirebaseMessagingHandler.instance._notificationManager
-        .processNotification(message));
+    unawaited(
+      FirebaseMessagingHandler.instance._notificationManager
+          .processNotification(message),
+    );
   }
 
   /// Returns the click-event stream backed by an in-memory controller.
@@ -278,14 +409,15 @@ class FirebaseMessagingHandler {
   static void addMockClickEvent(NotificationData data) {
     if (!_testModeEnabled) {
       throw StateError(
-          'Test mode is not enabled. Call setTestMode(true) before adding mock click events.');
+        'Test mode is not enabled. Call setTestMode(true) before adding mock click events.',
+      );
     }
     _mockClickController?.add(data);
     FirebaseMessagingHandler.instance._notificationManager.emitTestClick(data);
   }
 
   /// Closes and replaces the mock stream controllers, giving each test a clean
-  /// slate. Call this in [setUp] or [tearDown] to prevent event bleed-through.
+  /// slate. Call this in `setUp` or `tearDown` to prevent event bleed-through.
   @visibleForTesting
   static void resetMockData() {
     if (!_testModeEnabled) {
@@ -321,10 +453,7 @@ class FirebaseMessagingHandler {
       'collapseKey': collapseKey,
       'senderId': senderId,
       'ttl': ttl,
-      'notification': {
-        'title': title,
-        'body': body,
-      },
+      'notification': {'title': title, 'body': body},
     };
 
     map.removeWhere((_, value) => value == null);
@@ -370,22 +499,32 @@ class FirebaseMessagingHandler {
   ///
   /// This method displays a notification with action buttons that users can tap.
   /// Actions allow users to interact with notifications without opening the app.
-  Future<void> showNotificationWithActions({
+  Future<bool> showNotificationWithActions({
     required String title,
     required String body,
     required List<NotificationAction> actions,
     Map<String, dynamic>? payload,
     String? channelId,
     int? notificationId,
+    String? actionCategoryId,
   }) async {
-    await _notificationManager.showNotificationWithActions(
+    return _notificationManager.showNotificationWithActions(
       title: title,
       body: body,
       actions: actions,
       payload: payload,
       channelId: channelId,
       notificationId: notificationId,
+      actionCategoryId: actionCategoryId,
     );
+  }
+
+  /// Presents a local notification with complete Android and Apple detail
+  /// overrides and returns a typed success or failure result.
+  Future<NotificationOperationResult<int>> showLocalNotification(
+    LocalNotificationRequest notification,
+  ) {
+    return _notificationManager.showLocalNotification(notification);
   }
 
   /// Schedules a notification to be shown at a specific time.
@@ -402,6 +541,8 @@ class FirebaseMessagingHandler {
     Map<String, dynamic>? payload,
     List<NotificationAction>? actions,
     bool allowWhileIdle = false,
+    NotificationScheduleMode scheduleMode = NotificationScheduleMode.inexact,
+    bool fallbackToInexact = true,
   }) async {
     return await _notificationManager.scheduleNotification(
       id: id,
@@ -412,6 +553,8 @@ class FirebaseMessagingHandler {
       payload: payload,
       actions: actions,
       allowWhileIdle: allowWhileIdle,
+      scheduleMode: scheduleMode,
+      fallbackToInexact: fallbackToInexact,
     );
   }
 
@@ -521,8 +664,25 @@ class FirebaseMessagingHandler {
   ///
   /// Returns a list of all notifications that are scheduled to be shown
   /// in the future. This is primarily supported on Android.
-  Future<List<dynamic>?> getPendingNotifications() async {
+  Future<List<PendingNotificationSnapshot>> getPendingNotifications() async {
     return await _notificationManager.getPendingNotifications();
+  }
+
+  /// Gets notifications currently visible in the system notification UI.
+  Future<List<ActiveNotificationSnapshot>> getActiveNotifications() {
+    return _notificationManager.getActiveNotifications();
+  }
+
+  /// Returns whether the current platform reports notifications as enabled.
+  ///
+  /// A null result means that the platform has no equivalent runtime API.
+  Future<bool?> areNotificationsEnabled() {
+    return _notificationManager.areNotificationsEnabled();
+  }
+
+  /// Deletes an Android notification channel created by this application.
+  Future<bool> deleteNotificationChannel(String channelId) {
+    return _notificationManager.deleteNotificationChannel(channelId);
   }
 
   /// Refreshes the device timezone used by scheduled local notifications.
@@ -539,7 +699,7 @@ class FirebaseMessagingHandler {
   }
 
   /// Shows a grouped notification (Android notification groups)
-  Future<void> showGroupedNotification({
+  Future<bool> showGroupedNotification({
     required String title,
     required String body,
     required String groupKey,
@@ -549,7 +709,7 @@ class FirebaseMessagingHandler {
     bool isSummary = false,
     int? notificationId,
   }) async {
-    await _notificationManager.showGroupedNotification(
+    return _notificationManager.showGroupedNotification(
       title: title,
       body: body,
       groupKey: groupKey,
@@ -562,13 +722,13 @@ class FirebaseMessagingHandler {
   }
 
   /// Creates a notification group with multiple notifications
-  Future<void> createNotificationGroup({
+  Future<bool> createNotificationGroup({
     required String groupKey,
     required String groupTitle,
     required List<NotificationData> notifications,
     String? channelId,
   }) async {
-    await _notificationManager.createNotificationGroup(
+    return _notificationManager.createNotificationGroup(
       groupKey: groupKey,
       groupTitle: groupTitle,
       notifications: notifications,
@@ -577,12 +737,12 @@ class FirebaseMessagingHandler {
   }
 
   /// Dismisses a notification group (Android)
-  Future<void> dismissNotificationGroup(String groupKey) async {
-    await _notificationManager.dismissNotificationGroup(groupKey);
+  Future<bool> dismissNotificationGroup(String groupKey) {
+    return _notificationManager.dismissNotificationGroup(groupKey);
   }
 
   /// Shows a threaded notification (iOS conversation threads)
-  Future<void> showThreadedNotification({
+  Future<bool> showThreadedNotification({
     required String title,
     required String body,
     required String threadIdentifier,
@@ -590,7 +750,7 @@ class FirebaseMessagingHandler {
     Map<String, dynamic>? payload,
     int? notificationId,
   }) async {
-    await _notificationManager.showThreadedNotification(
+    return _notificationManager.showThreadedNotification(
       title: title,
       body: body,
       threadIdentifier: threadIdentifier,
@@ -619,7 +779,8 @@ class FirebaseMessagingHandler {
   /// This callback will be invoked whenever a notification event occurs,
   /// allowing you to integrate with your analytics service of choice.
   void setAnalyticsCallback(
-      void Function(String event, Map<String, dynamic> data) callback) {
+    void Function(String event, Map<String, dynamic> data) callback,
+  ) {
     _notificationManager.setAnalyticsCallback(callback);
   }
 
@@ -641,7 +802,8 @@ class FirebaseMessagingHandler {
 
   /// Registers in-app notification templates that can be invoked by silent pushes.
   void registerInAppNotificationTemplates(
-      Map<String, InAppNotificationTemplate> templates) {
+    Map<String, InAppNotificationTemplate> templates,
+  ) {
     _notificationManager.registerInAppTemplates(templates);
   }
 
@@ -652,7 +814,8 @@ class FirebaseMessagingHandler {
 
   /// Sets a fallback handler for in-app payloads that reference unknown templates.
   void setInAppFallbackDisplayHandler(
-      InAppNotificationDisplayCallback? fallbackHandler) {
+    InAppNotificationDisplayCallback? fallbackHandler,
+  ) {
     _notificationManager.setInAppFallbackDisplayHandler(fallbackHandler);
   }
 
@@ -688,36 +851,49 @@ class FirebaseMessagingHandler {
   /// Registers a unified handler for all notification lifecycles (foreground, background, terminated).
   /// Returns `true` from the handler when fully handled; return `false` to allow default pipeline or queue.
   Future<void> setUnifiedMessageHandler(
-      Future<bool> Function(
-              NormalizedMessage message, NotificationLifecycle lifecycle)?
-          handler) async {
+    Future<bool> Function(
+      NormalizedMessage message,
+      NotificationLifecycle lifecycle,
+    )?
+    handler,
+  ) async {
     await _notificationManager.setUnifiedMessageHandler(handler);
   }
 
   /// Registers a background message handler. The handler must be a top-level or
   /// static function as required by Firebase Messaging.
   Future<void> configureBackgroundMessageHandler(
-      Future<void> Function(RemoteMessage message) handler) async {
+    Future<void> Function(RemoteMessage message) handler,
+  ) async {
     await _notificationManager.setBackgroundMessageHandler(handler);
   }
 
   /// Handles a background message using the plugin's internal pipeline. This can
   /// be invoked from your top-level handler before executing custom logic.
-  static Future<void> handleBackgroundMessage(RemoteMessage message) async {
-    await NotificationManager.instance.handleBackgroundMessage(message);
+  static Future<void> handleBackgroundMessage(
+    RemoteMessage message, {
+    Future<void> Function()? bootstrap,
+  }) async {
+    await bootstrap?.call();
+    await NotificationManager.instance.handleBackgroundMessage(
+      message,
+      skipConfiguredBootstrap: bootstrap != null,
+    );
   }
 
   /// Registers a background processing callback that runs after the handler
   /// hydrates internal queues. Return `true` to mark the message handled, or
   /// `false` to enqueue it for retry when the app resumes.
   Future<void> configureBackgroundProcessingCallback(
-      Future<bool> Function(RemoteMessage message)? callback) async {
+    Future<bool> Function(RemoteMessage message)? callback,
+  ) async {
     await _notificationManager.setBackgroundProcessingCallback(callback);
   }
 
   /// Sets a custom bridge for data-only messages (no notification payload).
   void setDataOnlyMessageBridge(
-      Future<void> Function(RemoteMessage message)? bridge) {
+    Future<void> Function(RemoteMessage message)? bridge,
+  ) {
     _notificationManager.setDataOnlyMessageBridge(bridge);
   }
 

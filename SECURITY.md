@@ -8,7 +8,7 @@ The latest stable release receives security fixes first. Older versions may rece
 
 Do not open a public GitHub issue for suspected security vulnerabilities.
 
-Please report vulnerabilities by emailing `dev@qoder.in` with:
+Please report vulnerabilities by emailing `dev@afewgoodcoders.com` with:
 
 - A clear description of the issue
 - Affected package version

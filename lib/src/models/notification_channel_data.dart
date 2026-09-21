@@ -51,20 +51,21 @@ class NotificationChannelData {
   final List<NotificationAction>? actions;
 
   /// Creates a channel definition used during initialization and local display.
-  NotificationChannelData(
-      {required this.id,
-      required this.name,
-      this.description,
-      this.groupId,
-      this.importance = NotificationImportanceEnum.defaultImportance,
-      this.playSound = true,
-      this.soundPath,
-      this.soundFileName,
-      this.enableVibration = true,
-      this.enableLights = false,
-      this.vibrationPattern,
-      this.ledColor,
-      this.showBadge = true,
-      this.priority = NotificationPriorityEnum.defaultPriority,
-      this.actions});
+  NotificationChannelData({
+    required this.id,
+    required this.name,
+    this.description,
+    this.groupId,
+    this.importance = NotificationImportanceEnum.defaultImportance,
+    this.playSound = true,
+    this.soundPath,
+    this.soundFileName,
+    this.enableVibration = true,
+    this.enableLights = false,
+    this.vibrationPattern,
+    this.ledColor,
+    this.showBadge = true,
+    this.priority = NotificationPriorityEnum.defaultPriority,
+    this.actions,
+  });
 }

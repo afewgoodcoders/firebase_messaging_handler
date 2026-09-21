@@ -35,7 +35,8 @@ class InAppTemplatePresenter {
     return showGeneralDialog<T>(
       context: context,
       barrierDismissible: barrierDismissible,
-      barrierLabel: barrierLabel ??
+      barrierLabel:
+          barrierLabel ??
           MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: barrierColor,
       transitionDuration: transitionDuration,

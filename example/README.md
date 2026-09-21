@@ -56,7 +56,8 @@ When you first run the app, you'll see a **Firebase Setup Screen** with step-by-
    - Copy `web/firebase-messaging-sw.js.example` → `web/firebase-messaging-sw.js`
    - Fill in your Firebase project credentials inside that file
    - Get your VAPID key from Firebase Console → Project Settings → Cloud Messaging → Web Push certificates
-   - Pass it to `init()` via `webVapidKey:` (see `lib/services/firebase_messaging_handler_example_service.dart`)
+   - Pass it through `FCMConfiguration.webVapidKey` when calling `initialize()`
+     (see `lib/services/firebase_messaging_handler_example_service.dart`)
 
 > **Note:** `firebase_options.dart` and `firebase-messaging-sw.js` are gitignored — they contain credentials and must never be committed. The `.example` versions are safe templates with placeholder values.
 
@@ -81,12 +82,12 @@ This example app showcases every feature of our Firebase messaging handler plugi
 - **Unified notification stream** handling all notification types
 - **Flexible initial notification control** (stream or separate handling)
 - **Smart token management** with single backend call optimization
-- **Cross-platform support** (Android, iOS, Web)
+- **Capability-aware support** across Android, iOS, Web, macOS, Windows, and Linux
 
 ### ✅ **Advanced Features**
 - **Interactive notification actions** with custom payloads
-- **Notification scheduling** (one-time and recurring)
-- **Badge management** (iOS and Android)
+- **Notification scheduling** (where reported by runtime capabilities)
+- **Direct app-icon badge management** (iOS)
 - **Notification grouping** and threading
 - **Custom sound support**
 - **Built-in analytics** tracking
@@ -101,13 +102,16 @@ This example app showcases every feature of our Firebase messaging handler plugi
 3. Download and place `google-services.json` in `android/app/`
 4. Download and place `GoogleService-Info.plist` in `ios/Runner/`
 
-### **2. Get Your Sender ID**
+### **2. Confirm Firebase Project Metadata**
 
-Find your project's **Sender ID** in:
+The example reads the messaging sender ID from generated Firebase options. You
+can find it in:
 - Firebase Console > Project Settings > Cloud Messaging
 - Look for "Sender ID" (usually a 12-digit number)
 
-**⚠️ IMPORTANT: Sender ID is required for all platforms and must be provided!**
+You do not need to duplicate this value in normal v2 initialization. Web token
+creation may additionally require the public VAPID key from Web Push
+certificates.
 
 ### **3. Update Configuration**
 
@@ -134,7 +138,7 @@ flutter run -d ios
 #### **📊 Status Dashboard**
 - Shows initialization status
 - Displays FCM token
-- Badge count indicators
+- Capability-aware badge status
 - **Copy FCM Token** button in app bar
 
 #### **🚀 Feature Showcase**
@@ -142,7 +146,7 @@ flutter run -d ios
 - **Schedule Notification**: Schedule a notification for 1 minute from now
 - **Schedule Recurring**: Daily recurring notifications
 - **Create Notification Group**: Group multiple notifications together
-- **Update Badges**: Update badge counts for both platforms
+- **Update Badge**: Update the app-icon badge when the runtime supports it
 - **Custom Sounds**: Create notification channels with custom sounds
 
 #### **📨 Notification History**
@@ -167,8 +171,8 @@ flutter run -d ios
 3. Check "Recent Notifications" to see scheduled notifications
 
 #### **Test Badge Management**
-1. Tap "Update Badges" - sets iOS badge to 5, Android badge to 3
-2. See badge counts update in the dashboard
+1. On iOS, tap "Update Badges" to set the app-icon badge to 5.
+2. On unsupported platforms, confirm the activity feed reports that limitation.
 
 #### **Test Notification Grouping**
 1. Tap "Create Notification Group" - creates a group of 3 notifications
@@ -178,7 +182,7 @@ flutter run -d ios
 
 ### **Android**
 - Test notification channels and custom sounds
-- Verify badge management
+- Confirm direct badge mutation is reported unsupported
 - Check notification grouping behavior
 - Test scheduled notifications
 
@@ -222,7 +226,9 @@ For iOS notifications to work properly, you **MUST** configure APNs:
 - Remote FCM is not available on these platforms
 - Use the example to validate desktop local mode instead
 - Open Notification Doctor and confirm it reports `FCM unavailable` with local desktop mode active
-- Test local notification scheduling, inbox flows, and in-app templates
+- Test supported local presentation, inbox flows, and in-app templates
+- Query runtime capabilities before testing scheduling; Linux scheduling is not
+  guaranteed and recurring Windows scheduling is upstream-dependent
 
 ## 🔧 **Configuration Options**
 
@@ -268,7 +274,7 @@ messagingHandler.setAnalyticsCallback((event, data) {
 
 **Notifications not showing:**
 - Check Firebase configuration files are in place
-- Verify sender ID is correct
+- Run Notification Doctor and verify token, permission, and channel status
 - Check AndroidManifest.xml permissions
 
 **Scheduled notifications not working:**
@@ -303,16 +309,16 @@ The example logs all analytics events to the console:
 
 ## 🎯 **What This Proves**
 
-This example app proves that our Firebase messaging handler plugin:
+This example app is a validation harness for the package. It demonstrates:
 
-1. **✅ Works exactly as documented** - Every feature works as described
-2. **✅ Handles all edge cases** - Initial notifications, scheduling, actions, etc.
-3. **✅ Provides excellent developer experience** - Simple APIs that "just work"
-4. **✅ Is production-ready** - Comprehensive error handling and logging
-5. **✅ Supports all platforms** - Android, iOS, and Web
-6. **✅ Offers advanced features** - Beyond basic Firebase messaging capabilities
-7. **✅ Uses modern architecture** - Modular, scalable, and maintainable design
-8. **✅ Maintains backward compatibility** - Existing code continues to work
+1. Lifecycle, click, token, inbox, in-app, policy, and local-presentation APIs.
+2. Runtime capability checks and explicit unsupported results.
+3. Synthetic, compiled device, and credential-gated real-FCM test paths.
+4. Platform setup failures surfaced through diagnostics.
+
+It cannot prove carrier/OS delivery guarantees. Validate background delivery,
+terminated launches, actions, rich media, and permission behavior on each
+physical-device/OS combination you ship.
 
 ## 🚀 **Next Steps**
 
@@ -322,7 +328,7 @@ After testing this example:
 2. **Add your Firebase config** - Replace placeholder values with real Firebase project
 3. **Implement your logic** - Add your app's specific notification handling
 4. **Test thoroughly** - Use the testing utilities to ensure reliability
-5. **Deploy with confidence** - Our plugin is production-ready!
+5. **Run the release matrix** - Include physical-device and real-FCM scenarios
 
 ## 📝 **Integration Guide**
 

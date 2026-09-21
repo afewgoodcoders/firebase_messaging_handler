@@ -59,7 +59,7 @@ class FirebaseSetupScreen extends StatelessWidget {
                 ),
                 _buildStepItem(
                   'Enter package name',
-                  'qoder.flutter.fmhexample',
+                  'com.afewgoodcoders.fmhexample',
                   Icons.label_outline,
                 ),
                 _buildStepItem(
@@ -207,9 +207,9 @@ dependencies {
                   child: Text(
                     'Firebase Not Configured',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange.shade800,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange.shade800,
+                    ),
                   ),
                 ),
               ],
@@ -436,10 +436,7 @@ dependencies {
           const SizedBox(height: 12),
           Text(
             'Major configuration changes require app recompilation.',
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
             textAlign: TextAlign.center,
           ),
         ] else ...[
@@ -457,10 +454,7 @@ dependencies {
           const SizedBox(height: 8),
           Text(
             'Minor configuration changes can be retried.',
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
             textAlign: TextAlign.center,
           ),
         ],

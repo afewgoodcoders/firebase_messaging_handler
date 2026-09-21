@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-typedef AnalyticsCallback = FutureOr<void> Function(
-    String event, Map<String, dynamic> data);
+typedef AnalyticsCallback =
+    FutureOr<void> Function(String event, Map<String, dynamic> data);
 
 /// Interface for analytics service operations
 abstract class AnalyticsServiceInterface {

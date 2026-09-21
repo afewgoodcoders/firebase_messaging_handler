@@ -9,7 +9,7 @@ Add the package to your app:
 
 ```yaml
 dependencies:
-  firebase_messaging_handler: ^1.0.0
+  firebase_messaging_handler: ^2.0.0
 ```
 
 Then fetch dependencies:
@@ -20,8 +20,10 @@ flutter pub get
 
 ## Minimum Environment
 
-- Dart `>=3.5.0 <4.0.0`
-- Flutter `>=3.3.0`
+- Dart `>=3.10.0 <4.0.0`
+- Flutter `>=3.38.1`
+- Android API 24 or later
+- Android `compileSdk` 36 or later
 
 ## Next Steps
 

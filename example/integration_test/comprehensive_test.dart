@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -25,8 +26,10 @@ import 'test_dashboard.dart';
 ///
 /// Without credentials, FCM-send tests are SKIPPED — CI stays green.
 
-const _senderId =
-    String.fromEnvironment('FCM_TEST_SENDER_ID', defaultValue: '');
+const _senderId = String.fromEnvironment(
+  'FCM_TEST_SENDER_ID',
+  defaultValue: '',
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared state
@@ -59,8 +62,8 @@ Future<void> _run(
   final reason = needsCreds && !_hasCredentials
       ? 'No FCM_SERVICE_ACCOUNT_B64'
       : needsToken && !_hasToken
-          ? 'No FCM token available'
-          : null;
+      ? 'No FCM token available'
+      : null;
 
   await _suite.run(name, body, skip: skip, skipReason: reason);
 
@@ -79,7 +82,8 @@ void main() {
     // ── Global setup ──────────────────────────────────────────────────────────
 
     await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform);
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
 
     _sender = FcmTestSender.fromEnv();
     _suite = TestSuite();
@@ -102,6 +106,9 @@ void main() {
 
     // ── Diagnostics ───────────────────────────────────────────────────────────
     await _runDiagnostics(tester);
+
+    // ── Runtime capabilities ─────────────────────────────────────────────────
+    await _runCapabilities(tester);
 
     // ── Analytics ─────────────────────────────────────────────────────────────
     await _runAnalytics(tester);
@@ -140,19 +147,36 @@ void main() {
     await _runPayloadValidation(tester);
 
     // ── FCM send (real push, requires credentials) ────────────────────────────
-    // unsubscribeFromAllTopics() deletes the FCM token server-side. Force a
-    // fresh token from Firebase directly (bypassing the stale storage cache).
-    _token = await FirebaseMessaging.instance.getToken();
+    // Topic cleanup is independent from token lifecycle in v2.
+    _token = await FirebaseMessagingHandler.instance.getFcmToken();
     await _runFcmSend(tester);
 
     // Leave dashboard on screen for visual review.
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
-    // Final assertion: zero failures.
+    print(
+      '[comprehensive] summary: total=${_suite.total}, '
+      'passed=${_suite.passed}, failed=${_suite.failed}, '
+      'skipped=${_suite.skipped}, pending=${_suite.pending}, '
+      'running=${_suite.running}',
+    );
+
+    // Every registered case must reach a terminal status. When credentials
+    // were supplied, skipped live-FCM cases are failures in the test setup.
+    expect(_suite.pending, equals(0), reason: 'Some cases never started.');
+    expect(_suite.running, equals(0), reason: 'Some cases never completed.');
+    if (_hasCredentials) {
+      expect(
+        _suite.skipped,
+        equals(0),
+        reason: 'Live FCM credentials were supplied, but cases were skipped.',
+      );
+    }
     expect(
       _suite.failed,
       equals(0),
-      reason: 'Some tests failed:\n'
+      reason:
+          'Some tests failed:\n'
           '${_suite.cases.where((c) => c.status == TestStatus.failed).map((c) => '  • ${c.name}: ${c.errorMessage}').join('\n')}',
     );
   }, timeout: const Timeout(Duration(minutes: 5)));
@@ -187,6 +211,13 @@ void _registerAll() {
   _t(diag, 'pendingNotificationCount is ≥ 0');
   _t(diag, 'recommendations is a valid list');
   _t(diag, 'metadata contains fcmSupported key');
+
+  const capabilities = 'Capabilities';
+  _t(capabilities, 'getCapabilities() reports Android runtime');
+  _t(capabilities, 'remote push and local presentation are supported');
+  _t(capabilities, 'exact scheduling status is explicit');
+  _t(capabilities, 'active notification inspection completes');
+  _t(capabilities, 'system notification status is queryable');
 
   const analytics = 'Analytics';
   _t(analytics, 'setAnalyticsCallback() registers without crash');
@@ -224,11 +255,14 @@ void _registerAll() {
   _t(topics, 'subscribeToTopic() completes');
   _t(topics, 'subscribeToTopic() — multiple topics');
   _t(topics, 'unsubscribeFromTopic() completes');
+  _t(topics, 'getSubscribedTopics() reflects successful subscriptions');
   _t(topics, 'unsubscribeFromAllTopics() completes');
+  _t(topics, 'topic cleanup does not delete the FCM token');
 
   const sched = 'Scheduling';
   _t(sched, 'scheduleNotification() returns true');
   _t(sched, 'getPendingNotifications() returns non-null list');
+  _t(sched, 'pending notifications are strongly typed');
   _t(sched, 'Scheduled count ≥ 1 after scheduling');
   _t(sched, 'cancelScheduledNotification(id) returns true');
   _t(sched, 'scheduleRecurringNotification("daily") returns true');
@@ -249,15 +283,17 @@ void _registerAll() {
   }
 
   const display = 'Notification Display';
-  _t(display, 'showNotificationWithActions() completes');
-  _t(display, 'showGroupedNotification() completes');
-  _t(display, 'dismissNotificationGroup() completes');
-  _t(display, 'createNotificationGroup() completes');
-  _t(display, 'showThreadedNotification() completes');
+  _t(display, 'showNotificationWithActions() reports success');
+  _t(display, 'showLocalNotification() returns a typed success result');
+  _t(display, 'showGroupedNotification() reports success');
+  _t(display, 'dismissNotificationGroup() reports success');
+  _t(display, 'createNotificationGroup() reports success');
+  _t(display, 'showThreadedNotification() reports success');
 
   const chan = 'Custom Channels';
   _t(chan, 'createCustomSoundChannel() completes');
   _t(chan, 'getAvailableSounds() returns list or null without crash');
+  _t(chan, 'deleteNotificationChannel() returns true');
 
   const inapp = 'In-App Messaging';
   _t(inapp, 'registerInAppNotificationTemplates() registers custom template');
@@ -290,10 +326,12 @@ void _registerAll() {
   _t(payload, 'Payload with invalid actions type fails');
   _t(payload, 'Payload with valid analytics JSON string passes');
   _t(payload, 'Payload with invalid analytics type fails');
+  _t(payload, 'NotificationEnvelope v2 round-trips through FCM data');
+  _t(payload, 'NotificationEnvelope rejects expired or oversized payloads');
 
   const fcm = 'FCM Send (real push)';
   _t(fcm, 'Send foreground notification — returns HTTP 200');
-  _t(fcm, 'Notification shows on device (visible in system tray)');
+  _t(fcm, 'Foreground notification appears in active notifications');
   _t(fcm, 'Send data-only + fcmh_inapp — processes without crash');
   _t(fcm, 'In-app stream emits after data-only send');
   _t(fcm, 'Send with custom data fields — completes');
@@ -305,16 +343,32 @@ void _registerAll() {
 
 Future<void> _runInit(WidgetTester tester) async {
   await _run('init() returns a click stream', () async {
-    _clickStream = await FirebaseMessagingHandler.instance.init(
-      senderId: _senderId.isEmpty ? '000000000000' : _senderId,
-      androidChannelList: [
-        NotificationChannelData(
-          id: 'test_default',
-          name: 'Test Default',
-          description: 'Integration test default channel',
-        ),
-      ],
-      androidNotificationIconPath: '@mipmap/ic_launcher',
+    _clickStream = await FirebaseMessagingHandler.instance.initialize(
+      FCMConfiguration(
+        senderId: _senderId.isEmpty ? '000000000000' : _senderId,
+        androidChannels: <NotificationChannelData>[
+          NotificationChannelData(
+            id: 'test_default',
+            name: 'Test Default',
+            description: 'Integration test default channel',
+          ),
+        ],
+        androidNotificationIconPath: '@mipmap/ic_launcher',
+        requestPermissionOnInitialize: false,
+        synchronizeTokenOnInitialize: false,
+        updateTokenCallback: (String token) async {
+          _token = token;
+          return true;
+        },
+        actionCategories: const <NotificationActionCategory>[
+          NotificationActionCategory(
+            id: 'integration_actions',
+            actions: <NotificationAction>[
+              NotificationAction(id: 'reply', title: 'Reply', textInput: true),
+            ],
+          ),
+        ],
+      ),
     );
     // Stream may be null on platforms where FCM is unavailable.
     // On Android with valid config it should be non-null.
@@ -322,8 +376,8 @@ Future<void> _runInit(WidgetTester tester) async {
 
   await _run('init() creates default high-importance channel', () async {
     // Calling init again is idempotent; the channel was auto-created above.
-    final pending =
-        await FirebaseMessagingHandler.instance.getPendingNotifications();
+    final pending = await FirebaseMessagingHandler.instance
+        .getPendingNotifications();
     expect(pending, isNotNull);
   }, tester: tester);
 
@@ -337,45 +391,104 @@ Future<void> _runInit(WidgetTester tester) async {
 Future<void> _runToken(WidgetTester tester) async {
   await _run('getFcmToken() returns non-null token', () async {
     _token = await FirebaseMessagingHandler.instance.getFcmToken();
-    expect(_token, isNotNull,
-        reason: FirebaseMessagingHandler.instance.lastTokenError ??
-            'token null with no error set');
+    expect(
+      _token,
+      isNotNull,
+      reason:
+          FirebaseMessagingHandler.instance.lastTokenError ??
+          'token null with no error set',
+    );
     expect(_token, isNotEmpty);
+    expect(
+      await FirebaseMessagingHandler.instance.synchronizeToken(force: true),
+      isTrue,
+    );
   }, tester: tester);
 
-  await _run('Token has expected format (length ≥ 100)', () async {
-    expect(_token!.length, greaterThanOrEqualTo(100),
-        reason: 'FCM tokens are typically 140–200 characters');
-  }, needsToken: true, tester: tester);
+  await _run(
+    'Token has expected format (length ≥ 100)',
+    () async {
+      expect(
+        _token!.length,
+        greaterThanOrEqualTo(100),
+        reason: 'FCM tokens are typically 140–200 characters',
+      );
+    },
+    needsToken: true,
+    tester: tester,
+  );
 
-  await _run('lastTokenError is null after success', () async {
-    expect(FirebaseMessagingHandler.instance.lastTokenError, isNull);
-  }, needsToken: true, tester: tester);
+  await _run(
+    'lastTokenError is null after success',
+    () async {
+      expect(FirebaseMessagingHandler.instance.lastTokenError, isNull);
+    },
+    needsToken: true,
+    tester: tester,
+  );
 
-  await _run('getFcmToken() is idempotent (same token on repeat call)',
-      () async {
-    final second = await FirebaseMessagingHandler.instance.getFcmToken();
-    expect(second, equals(_token));
-  }, needsToken: true, tester: tester);
+  await _run(
+    'getFcmToken() is idempotent (same token on repeat call)',
+    () async {
+      final second = await FirebaseMessagingHandler.instance.getFcmToken();
+      expect(second, equals(_token));
+    },
+    needsToken: true,
+    tester: tester,
+  );
+}
+
+Future<void> _runCapabilities(WidgetTester tester) async {
+  late NotificationCapabilities capabilities;
+
+  await _run('getCapabilities() reports Android runtime', () async {
+    capabilities = await FirebaseMessagingHandler.instance.getCapabilities();
+    expect(capabilities.platform, equals('android'));
+  }, tester: tester);
+
+  await _run('remote push and local presentation are supported', () async {
+    expect(capabilities.supports(NotificationCapability.remotePush), isTrue);
+    expect(
+      capabilities.supports(NotificationCapability.localPresentation),
+      isTrue,
+    );
+  }, tester: tester);
+
+  await _run('exact scheduling status is explicit', () async {
+    final status = capabilities[NotificationCapability.exactScheduling];
+    expect(status.reason == null || status.reason!.isNotEmpty, isTrue);
+  }, tester: tester);
+
+  await _run('active notification inspection completes', () async {
+    final active = await FirebaseMessagingHandler.instance
+        .getActiveNotifications();
+    expect(active, isA<List<ActiveNotificationSnapshot>>());
+  }, tester: tester);
+
+  await _run('system notification status is queryable', () async {
+    final enabled = await FirebaseMessagingHandler.instance
+        .areNotificationsEnabled();
+    expect(enabled, isNotNull);
+  }, tester: tester);
 }
 
 Future<void> _runPermissions(WidgetTester tester) async {
   await _run('requestPermissionsWizard() completes without error', () async {
-    final result =
-        await FirebaseMessagingHandler.instance.requestPermissionsWizard();
+    final result = await FirebaseMessagingHandler.instance
+        .requestPermissionsWizard();
     expect(result.overallStatus, isNotNull);
   }, tester: tester);
 
   await _run('overallStatus is a non-empty string', () async {
-    final result =
-        await FirebaseMessagingHandler.instance.requestPermissionsWizard();
+    final result = await FirebaseMessagingHandler.instance
+        .requestPermissionsWizard();
     expect(result.overallStatus, isNotEmpty);
     print('[comprehensive] permissions: ${result.overallStatus}');
   }, tester: tester);
 
   await _run('notes field is a valid list', () async {
-    final result =
-        await FirebaseMessagingHandler.instance.requestPermissionsWizard();
+    final result = await FirebaseMessagingHandler.instance
+        .requestPermissionsWizard();
     expect(result.notes, isA<List<String>>());
   }, tester: tester);
 }
@@ -398,8 +511,11 @@ Future<void> _runDiagnostics(WidgetTester tester) async {
   }, tester: tester);
 
   await _run('permissionsGranted is true', () async {
-    expect(diag.permissionsGranted, isTrue,
-        reason: 'Status: ${diag.authorizationStatus}');
+    expect(
+      diag.permissionsGranted,
+      isTrue,
+      reason: 'Status: ${diag.authorizationStatus}',
+    );
   }, tester: tester);
 
   await _run('pendingNotificationCount is ≥ 0', () async {
@@ -428,8 +544,10 @@ Future<void> _runAnalytics(WidgetTester tester) async {
   }, tester: tester);
 
   await _run('trackAnalyticsEvent() triggers callback', () async {
-    FirebaseMessagingHandler.instance
-        .trackAnalyticsEvent('test_event', {'key': 'value', 'count': 42});
+    FirebaseMessagingHandler.instance.trackAnalyticsEvent('test_event', {
+      'key': 'value',
+      'count': 42,
+    });
     expect(capturedEvent, isNotNull);
   }, tester: tester);
 
@@ -444,7 +562,7 @@ Future<void> _runAnalytics(WidgetTester tester) async {
 
   await _run('setAnalyticsCallback(null) clears without crash', () async {
     // ignore: avoid_dynamic_calls
-    FirebaseMessagingHandler.instance.setAnalyticsCallback((_, __) {});
+    FirebaseMessagingHandler.instance.setAnalyticsCallback((_, _) {});
     FirebaseMessagingHandler.instance.trackAnalyticsEvent('after', {});
   }, tester: tester);
 }
@@ -469,21 +587,26 @@ Future<void> _runHandlers(WidgetTester tester) async {
     expect(msg.notification?.title, equals('Test Title'));
   }, tester: tester);
 
-  await _run('addMockNotification() processes through unified handler',
-      () async {
-    await FirebaseMessagingHandler.instance
-        .setUnifiedMessageHandler((normalized, lifecycle) async {
-      capturedMsg = normalized;
-      return true;
-    });
-    final msg = FirebaseMessagingHandler.createMockRemoteMessage(
-      title: 'Handler Test',
-      body: 'Body',
-    );
-    FirebaseMessagingHandler.addMockNotification(msg);
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    expect(capturedMsg, isNotNull);
-  }, tester: tester);
+  await _run(
+    'addMockNotification() processes through unified handler',
+    () async {
+      await FirebaseMessagingHandler.instance.setUnifiedMessageHandler((
+        normalized,
+        lifecycle,
+      ) async {
+        capturedMsg = normalized;
+        return true;
+      });
+      final msg = FirebaseMessagingHandler.createMockRemoteMessage(
+        title: 'Handler Test',
+        body: 'Body',
+      );
+      FirebaseMessagingHandler.addMockNotification(msg);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(capturedMsg, isNotNull);
+    },
+    tester: tester,
+  );
 
   await _run('Unified handler receives NormalizedMessage', () async {
     expect(capturedMsg, isA<NormalizedMessage>());
@@ -500,8 +623,9 @@ Future<void> _runHandlers(WidgetTester tester) async {
   }, tester: tester);
 
   await _run('addMockClickEvent() emits on click stream', () async {
-    FirebaseMessagingHandler.getMockClickStream()
-        ?.listen((d) => capturedClick = d);
+    FirebaseMessagingHandler.getMockClickStream()?.listen(
+      (d) => capturedClick = d,
+    );
     FirebaseMessagingHandler.addMockClickEvent(
       FirebaseMessagingHandler.createMockNotificationData(
         title: 'Click Test',
@@ -542,23 +666,21 @@ Future<void> _runDataBridge(WidgetTester tester) async {
   RemoteMessage? bridgedMsg;
 
   await _run('setDataOnlyMessageBridge() registers custom bridge', () async {
-    FirebaseMessagingHandler.instance
-        .setDataOnlyMessageBridge((msg) async => bridgedMsg = msg);
-    expect(true, isTrue); // registration completed without throw
+    FirebaseMessagingHandler.instance.setDataOnlyMessageBridge(
+      (msg) async => bridgedMsg = msg,
+    );
   }, tester: tester);
 
   await _run('Bridge callback is invoked for data-only messages', () async {
-    FirebaseMessagingHandler.setTestMode(true);
+    final messageId = 'bridge-${DateTime.now().microsecondsSinceEpoch}';
     final dataOnly = FirebaseMessagingHandler.createMockRemoteMessage(
+      messageId: messageId,
       data: <String, dynamic>{'title': 'Silent', 'body': 'Data only'},
     );
-    FirebaseMessagingHandler.addMockNotification(dataOnly);
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-    FirebaseMessagingHandler.setTestMode(false);
-    // Bridge may or may not fire depending on internal routing logic.
-    // Capture value to satisfy static analysis; assert no crash occurred.
-    final _ = bridgedMsg;
-    expect(true, isTrue);
+    await FirebaseMessagingHandler.handleBackgroundMessage(dataOnly);
+    expect(bridgedMsg, isNotNull);
+    expect(bridgedMsg!.messageId, equals(messageId));
+    expect(bridgedMsg!.data['title'], equals('Silent'));
   }, tester: tester);
 
   await _run('enableDefaultDataOnlyBridge() registers without crash', () async {
@@ -606,8 +728,9 @@ Future<void> _runTopics(WidgetTester tester) async {
   }, tester: tester);
 
   await _run('subscribeToTopic() — multiple topics', () async {
-    await FirebaseMessagingHandler.instance
-        .subscribeToTopic('fmh_announcements');
+    await FirebaseMessagingHandler.instance.subscribeToTopic(
+      'fmh_announcements',
+    );
     await FirebaseMessagingHandler.instance.subscribeToTopic('fmh_updates');
   }, tester: tester);
 
@@ -615,8 +738,27 @@ Future<void> _runTopics(WidgetTester tester) async {
     await FirebaseMessagingHandler.instance.unsubscribeFromTopic('fmh_test');
   }, tester: tester);
 
+  await _run(
+    'getSubscribedTopics() reflects successful subscriptions',
+    () async {
+      final topics = await FirebaseMessagingHandler.instance
+          .getSubscribedTopics();
+      expect(topics, containsAll(<String>['fmh_announcements', 'fmh_updates']));
+      expect(topics, isNot(contains('fmh_test')));
+    },
+    tester: tester,
+  );
+
   await _run('unsubscribeFromAllTopics() completes', () async {
     await FirebaseMessagingHandler.instance.unsubscribeFromAllTopics();
+    expect(
+      await FirebaseMessagingHandler.instance.getSubscribedTopics(),
+      isEmpty,
+    );
+  }, tester: tester);
+
+  await _run('topic cleanup does not delete the FCM token', () async {
+    expect(await FirebaseMessagingHandler.instance.getFcmToken(), isNotNull);
   }, tester: tester);
 }
 
@@ -635,13 +777,15 @@ Future<void> _runScheduling(WidgetTester tester) async {
     expect(ok, isTrue);
   }, tester: tester);
 
-  late List<dynamic> pending;
+  late List<PendingNotificationSnapshot> pending;
 
   await _run('getPendingNotifications() returns non-null list', () async {
-    pending =
-        (await FirebaseMessagingHandler.instance.getPendingNotifications()) ??
-            [];
-    expect(pending, isA<List>());
+    pending = await FirebaseMessagingHandler.instance.getPendingNotifications();
+    expect(pending, isA<List<PendingNotificationSnapshot>>());
+  }, tester: tester);
+
+  await _run('pending notifications are strongly typed', () async {
+    expect(pending.where((item) => item.id == schedId), isNotEmpty);
   }, tester: tester);
 
   await _run('Scheduled count ≥ 1 after scheduling', () async {
@@ -655,29 +799,29 @@ Future<void> _runScheduling(WidgetTester tester) async {
   }, tester: tester);
 
   await _run('scheduleRecurringNotification("daily") returns true', () async {
-    final ok =
-        await FirebaseMessagingHandler.instance.scheduleRecurringNotification(
-      id: 9002,
-      title: 'Daily Reminder',
-      body: 'Recurring test',
-      repeatInterval: 'daily',
-      hour: 9,
-      minute: 0,
-      channelId: 'test_default',
-    );
+    final ok = await FirebaseMessagingHandler.instance
+        .scheduleRecurringNotification(
+          id: 9002,
+          title: 'Daily Reminder',
+          body: 'Recurring test',
+          repeatInterval: 'daily',
+          hour: 9,
+          minute: 0,
+          channelId: 'test_default',
+        );
     expect(ok, isTrue);
   }, tester: tester);
 
   await _run('scheduleRecurringNotification("weekly") returns true', () async {
-    final ok =
-        await FirebaseMessagingHandler.instance.scheduleRecurringNotification(
-      id: 9003,
-      title: 'Weekly Reminder',
-      body: 'Recurring weekly test',
-      repeatInterval: 'weekly',
-      hour: 10,
-      minute: 30,
-    );
+    final ok = await FirebaseMessagingHandler.instance
+        .scheduleRecurringNotification(
+          id: 9003,
+          title: 'Weekly Reminder',
+          body: 'Recurring weekly test',
+          repeatInterval: 'weekly',
+          hour: 10,
+          minute: 30,
+        );
     expect(ok, isTrue);
   }, tester: tester);
 
@@ -687,12 +831,15 @@ Future<void> _runScheduling(WidgetTester tester) async {
     expect(ok, isTrue);
   }, tester: tester);
 
-  await _run('getPendingNotifications() returns empty after cancel all',
-      () async {
-    final remaining =
-        await FirebaseMessagingHandler.instance.getPendingNotifications();
-    expect(remaining ?? [], isEmpty);
-  }, tester: tester);
+  await _run(
+    'getPendingNotifications() returns empty after cancel all',
+    () async {
+      final remaining = await FirebaseMessagingHandler.instance
+          .getPendingNotifications();
+      expect(remaining, isEmpty);
+    },
+    tester: tester,
+  );
 }
 
 Future<void> _runBadges(WidgetTester tester) async {
@@ -702,8 +849,8 @@ Future<void> _runBadges(WidgetTester tester) async {
     }, tester: tester);
 
     await _run('getAndroidBadgeCount() returns value', () async {
-      final count =
-          await FirebaseMessagingHandler.instance.getAndroidBadgeCount();
+      final count = await FirebaseMessagingHandler.instance
+          .getAndroidBadgeCount();
       // Badge count may not be readable on all launchers; just verify no crash.
       expect(count == null || count >= 0, isTrue);
     }, tester: tester);
@@ -732,52 +879,90 @@ Future<void> _runBadges(WidgetTester tester) async {
 }
 
 Future<void> _runDisplay(WidgetTester tester) async {
-  await _run('showNotificationWithActions() completes', () async {
-    await FirebaseMessagingHandler.instance.showNotificationWithActions(
-      title: 'Test Actions',
-      body: 'Tap an action',
-      actions: [
-        const NotificationAction(id: 'ok', title: 'OK'),
-        const NotificationAction(id: 'dismiss', title: 'Dismiss'),
-      ],
-      payload: {'source': 'integration_test'},
-      channelId: 'test_default',
+  await _run('showNotificationWithActions() reports success', () async {
+    expect(
+      await FirebaseMessagingHandler.instance.showNotificationWithActions(
+        title: 'Test Actions',
+        body: 'Tap an action',
+        actions: [
+          const NotificationAction(id: 'ok', title: 'OK'),
+          const NotificationAction(id: 'dismiss', title: 'Dismiss'),
+        ],
+        payload: {'source': 'integration_test'},
+        channelId: 'test_default',
+      ),
+      isTrue,
     );
   }, tester: tester);
 
-  await _run('showGroupedNotification() completes', () async {
-    await FirebaseMessagingHandler.instance.showGroupedNotification(
-      title: 'Group Message 1',
-      body: 'First in group',
-      groupKey: 'test_group',
-      channelId: 'test_default',
+  await _run(
+    'showLocalNotification() returns a typed success result',
+    () async {
+      final result = await FirebaseMessagingHandler.instance
+          .showLocalNotification(
+            const LocalNotificationRequest(
+              id: 9050,
+              title: 'Typed local request',
+              body: 'Native detail escape hatch',
+              channelId: 'test_default',
+            ),
+          );
+      expect(result.isSuccess, isTrue, reason: result.message);
+      expect(result.value, equals(9050));
+    },
+    tester: tester,
+  );
+
+  await _run('showGroupedNotification() reports success', () async {
+    expect(
+      await FirebaseMessagingHandler.instance.showGroupedNotification(
+        title: 'Group Message 1',
+        body: 'First in group',
+        groupKey: 'test_group',
+        channelId: 'test_default',
+      ),
+      isTrue,
     );
   }, tester: tester);
 
-  await _run('dismissNotificationGroup() completes', () async {
-    await FirebaseMessagingHandler.instance
-        .dismissNotificationGroup('test_group');
+  await _run('dismissNotificationGroup() reports success', () async {
+    expect(
+      await FirebaseMessagingHandler.instance.dismissNotificationGroup(
+        'test_group',
+      ),
+      isTrue,
+    );
   }, tester: tester);
 
-  await _run('createNotificationGroup() completes', () async {
+  await _run('createNotificationGroup() reports success', () async {
     final item1 = FirebaseMessagingHandler.createMockNotificationData(
-        title: 'G1', body: 'Body 1');
+      title: 'G1',
+      body: 'Body 1',
+    );
     final item2 = FirebaseMessagingHandler.createMockNotificationData(
-        title: 'G2', body: 'Body 2');
-    await FirebaseMessagingHandler.instance.createNotificationGroup(
-      groupKey: 'test_group_2',
-      groupTitle: 'Test Group',
-      notifications: [item1, item2],
-      channelId: 'test_default',
+      title: 'G2',
+      body: 'Body 2',
+    );
+    expect(
+      await FirebaseMessagingHandler.instance.createNotificationGroup(
+        groupKey: 'test_group_2',
+        groupTitle: 'Test Group',
+        notifications: [item1, item2],
+        channelId: 'test_default',
+      ),
+      isTrue,
     );
   }, tester: tester);
 
-  await _run('showThreadedNotification() completes', () async {
-    await FirebaseMessagingHandler.instance.showThreadedNotification(
-      title: 'Threaded Message',
-      body: 'Part of a thread',
-      threadIdentifier: 'test_thread_1',
-      channelId: 'test_default',
+  await _run('showThreadedNotification() reports success', () async {
+    expect(
+      await FirebaseMessagingHandler.instance.showThreadedNotification(
+        title: 'Threaded Message',
+        body: 'Part of a thread',
+        threadIdentifier: 'test_thread_1',
+        channelId: 'test_default',
+      ),
+      isTrue,
     );
   }, tester: tester);
 }
@@ -792,27 +977,43 @@ Future<void> _runChannels(WidgetTester tester) async {
     );
   }, tester: tester);
 
-  await _run('getAvailableSounds() returns list or null without crash',
-      () async {
-    final sounds = await FirebaseMessagingHandler.instance.getAvailableSounds();
-    // Returns null (unsupported platform) or a List — just verify no crash.
-    expect(sounds == null || sounds.isNotEmpty || sounds.isEmpty, isTrue);
+  await _run(
+    'getAvailableSounds() returns list or null without crash',
+    () async {
+      final sounds = await FirebaseMessagingHandler.instance
+          .getAvailableSounds();
+      // Returns null (unsupported platform) or a List — just verify no crash.
+      expect(sounds == null || sounds.isNotEmpty || sounds.isEmpty, isTrue);
+    },
+    tester: tester,
+  );
+
+  await _run('deleteNotificationChannel() returns true', () async {
+    expect(
+      await FirebaseMessagingHandler.instance.deleteNotificationChannel(
+        'test_custom_sound',
+      ),
+      isTrue,
+    );
   }, tester: tester);
 }
 
 Future<void> _runInApp(WidgetTester tester) async {
-  await _run('registerInAppNotificationTemplates() registers custom template',
-      () async {
-    FirebaseMessagingHandler.instance.registerInAppNotificationTemplates({
-      'custom_banner': InAppNotificationTemplate(
-        id: 'custom_banner',
-        description: 'Custom banner for integration tests',
-        onDisplay: (data) async {
-          // Renders inline, no actual UI shown in test.
-        },
-      ),
-    });
-  }, tester: tester);
+  await _run(
+    'registerInAppNotificationTemplates() registers custom template',
+    () async {
+      FirebaseMessagingHandler.instance.registerInAppNotificationTemplates({
+        'custom_banner': InAppNotificationTemplate(
+          id: 'custom_banner',
+          description: 'Custom banner for integration tests',
+          onDisplay: (data) async {
+            // Renders inline, no actual UI shown in test.
+          },
+        ),
+      });
+    },
+    tester: tester,
+  );
 
   await _run('getInAppNotificationStream() returns a stream', () async {
     final stream = FirebaseMessagingHandler.instance.getInAppNotificationStream(
@@ -829,23 +1030,30 @@ Future<void> _runInApp(WidgetTester tester) async {
     );
   }, tester: tester);
 
-  await _run('setInAppDeliveryPolicy() with frequency caps completes',
-      () async {
-    await FirebaseMessagingHandler.instance.setInAppDeliveryPolicy(
-      const InAppDeliveryPolicy(
-        globalInterval: Duration(minutes: 5),
-        globalDailyCap: 10,
-        perTemplateDailyCap: 3,
-      ),
-    );
-  }, tester: tester);
+  await _run(
+    'setInAppDeliveryPolicy() with frequency caps completes',
+    () async {
+      await FirebaseMessagingHandler.instance.setInAppDeliveryPolicy(
+        const InAppDeliveryPolicy(
+          globalInterval: Duration(minutes: 5),
+          globalDailyCap: 10,
+          perTemplateDailyCap: 3,
+        ),
+      );
+    },
+    tester: tester,
+  );
 
-  await _run('setInAppFallbackDisplayHandler() registers without crash',
-      () async {
-    FirebaseMessagingHandler.instance
-        .setInAppFallbackDisplayHandler((data) async {});
-    FirebaseMessagingHandler.instance.setInAppFallbackDisplayHandler(null);
-  }, tester: tester);
+  await _run(
+    'setInAppFallbackDisplayHandler() registers without crash',
+    () async {
+      FirebaseMessagingHandler.instance.setInAppFallbackDisplayHandler(
+        (data) async {},
+      );
+      FirebaseMessagingHandler.instance.setInAppFallbackDisplayHandler(null);
+    },
+    tester: tester,
+  );
 
   await _run('clearPendingInAppNotifications() completes', () async {
     await FirebaseMessagingHandler.instance.clearPendingInAppNotifications();
@@ -917,12 +1125,14 @@ Future<void> _runInbox(WidgetTester tester) async {
   await _run('InMemoryInboxStorage: pagination (page 0 vs page 1)', () async {
     // Add 5 more items so we have 6 total.
     for (var i = 3; i <= 7; i++) {
-      await storage.upsert(NotificationInboxItem(
-        id: 'inbox-00$i',
-        title: 'Message $i',
-        body: 'Body $i',
-        timestamp: DateTime.now(),
-      ));
+      await storage.upsert(
+        NotificationInboxItem(
+          id: 'inbox-00$i',
+          title: 'Message $i',
+          body: 'Body $i',
+          timestamp: DateTime.now(),
+        ),
+      );
     }
     final page0 = await storage.fetch(page: 0, pageSize: 4);
     final page1 = await storage.fetch(page: 1, pageSize: 4);
@@ -1012,17 +1222,56 @@ Future<void> _runPayloadValidation(WidgetTester tester) async {
     });
     expect(ok, isFalse);
   }, tester: tester);
+
+  await _run('NotificationEnvelope v2 round-trips through FCM data', () async {
+    final envelope = NotificationEnvelope(
+      id: 'integration-envelope',
+      command: NotificationEnvelopeCommand.display,
+      title: 'Envelope',
+      body: 'Round trip',
+      actions: const <NotificationAction>[
+        NotificationAction(id: 'reply', title: 'Reply', textInput: true),
+      ],
+    );
+    final encoded = envelope.toFcmData();
+    final decoded = NotificationEnvelope.fromMap(encoded);
+    expect(decoded.validate().isValid, isTrue);
+    expect(decoded.actions.single.textInput, isTrue);
+  }, tester: tester);
+
+  await _run(
+    'NotificationEnvelope rejects expired or oversized payloads',
+    () async {
+      final expired = NotificationEnvelope(
+        id: 'expired',
+        command: NotificationEnvelopeCommand.display,
+        title: 'Expired',
+        expiresAt: DateTime.now().subtract(const Duration(minutes: 1)),
+      );
+      expect(expired.isExpired(), isTrue);
+      final oversized = NotificationEnvelope(
+        id: 'oversized',
+        command: NotificationEnvelopeCommand.display,
+        title: 'Too large',
+        data: <String, dynamic>{'value': 'x' * 5000},
+      );
+      expect(oversized.toFcmData, throwsRangeError);
+    },
+    tester: tester,
+  );
 }
 
 Future<void> _runFcmSend(WidgetTester tester) async {
   InAppNotificationData? capturedInApp;
+  final notificationTitle =
+      'Comprehensive ${DateTime.now().millisecondsSinceEpoch}';
 
   await _run(
     'Send foreground notification — returns HTTP 200',
     () async {
       await _sender!.send(
         deviceToken: _token!,
-        title: 'Comprehensive Test',
+        title: notificationTitle,
         body:
             'FMH integration suite — ts=${DateTime.now().millisecondsSinceEpoch}',
       );
@@ -1033,13 +1282,26 @@ Future<void> _runFcmSend(WidgetTester tester) async {
   );
 
   await _run(
-    'Notification shows on device (visible in system tray)',
+    'Foreground notification appears in active notifications',
     () async {
-      // Give FCM time to deliver the notification from the previous send.
-      await Future<void>.delayed(const Duration(seconds: 3));
-      // The notification appeared if the send succeeded (HTTP 200 above).
-      // We assert true here; the visual confirmation is on the device screen.
-      expect(true, isTrue);
+      final deadline = DateTime.now().add(const Duration(seconds: 15));
+      var active = <ActiveNotificationSnapshot>[];
+      do {
+        active = await FirebaseMessagingHandler.instance
+            .getActiveNotifications();
+        if (active.any((item) => item.title == notificationTitle)) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      } while (DateTime.now().isBefore(deadline));
+
+      expect(
+        active.any((item) => item.title == notificationTitle),
+        isTrue,
+        reason:
+            'FCM returned HTTP 200, but the foreground notification was not '
+            'visible in Android active notifications within 15 seconds.',
+      );
     },
     needsCreds: true,
     needsToken: true,
@@ -1049,19 +1311,35 @@ Future<void> _runFcmSend(WidgetTester tester) async {
   await _run(
     'Send data-only + fcmh_inapp — processes without crash',
     () async {
-      // Subscribe to in-app stream before sending.
-      FirebaseMessagingHandler.instance
-          .getInAppNotificationStream(includePendingStorageItems: false)
-          .listen((d) => capturedInApp = d);
-
-      await _sender!.send(
-        deviceToken: _token!,
-        data: {
-          'fcmh_inapp': '{"template":"builtin_generic","type":"snackbar",'
-              '"title":"Integration Test","body":"Silent push processed"}',
-        },
+      final inAppId = 'in-app-${DateTime.now().microsecondsSinceEpoch}';
+      final delivery = Completer<InAppNotificationData>();
+      await FirebaseMessagingHandler.instance.setInAppDeliveryPolicy(
+        const InAppDeliveryPolicy(),
       );
-      await Future<void>.delayed(const Duration(seconds: 4));
+      final subscription = FirebaseMessagingHandler.instance
+          .getInAppNotificationStream(includePendingStorageItems: false)
+          .listen((data) {
+            if (data.id == inAppId && !delivery.isCompleted) {
+              delivery.complete(data);
+            }
+          });
+
+      try {
+        await _sender!.send(
+          deviceToken: _token!,
+          data: {
+            'fcmh_inapp':
+                '{"id":"$inAppId","templateId":"builtin_generic",'
+                '"type":"snackbar","title":"Integration Test",'
+                '"body":"Silent push processed"}',
+          },
+        );
+        capturedInApp = await delivery.future.timeout(
+          const Duration(seconds: 20),
+        );
+      } finally {
+        await subscription.cancel();
+      }
     },
     needsCreds: true,
     needsToken: true,
@@ -1071,17 +1349,11 @@ Future<void> _runFcmSend(WidgetTester tester) async {
   await _run(
     'In-app stream emits after data-only send',
     () async {
-      // The foreground in-app stream fires when the app is in the foreground
-      // and a fcmh_inapp message arrives. If it fired, capturedInApp is set.
-      if (capturedInApp != null) {
-        expect(capturedInApp!.templateId, isNotEmpty);
-        print('[comprehensive] in-app received: ${capturedInApp!.templateId}');
-      } else {
-        // Acceptable if in-app delivery policy or timing prevented it.
-        print('[comprehensive] ⚠ in-app stream did not emit within 4 s; '
-            'may be throttled or in background handler queue.');
-        expect(true, isTrue); // soft pass — sending succeeded
-      }
+      expect(capturedInApp, isNotNull);
+      expect(capturedInApp!.templateId, equals('builtin_generic'));
+      expect(capturedInApp!.content['title'], equals('Integration Test'));
+      expect(capturedInApp!.content['body'], equals('Silent push processed'));
+      print('[comprehensive] in-app received: ${capturedInApp!.templateId}');
     },
     needsCreds: true,
     needsToken: true,

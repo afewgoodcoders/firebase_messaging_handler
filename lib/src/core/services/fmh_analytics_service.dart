@@ -2,11 +2,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import '../interfaces/analytics_service_interface.dart';
 import '../utils/platform_utils.dart';
+import '../../models/notification_analytics_options.dart';
 
 /// Analytics service implementation
 class FmhAnalyticsService implements AnalyticsServiceInterface {
   static FmhAnalyticsService? _instance;
   AnalyticsCallback? _analyticsCallback;
+  NotificationAnalyticsOptions _options = const NotificationAnalyticsOptions();
+  bool _debugLoggingEnabled = false;
 
   /// Singleton instance
   static FmhAnalyticsService get instance {
@@ -19,6 +22,7 @@ class FmhAnalyticsService implements AnalyticsServiceInterface {
   @override
   Future<void> trackEvent(String event, Map<String, dynamic> properties) async {
     try {
+      if (_options.privacy == NotificationAnalyticsPrivacy.disabled) return;
       if (_analyticsCallback != null) {
         await _analyticsCallback!(event, properties);
       }
@@ -33,6 +37,15 @@ class FmhAnalyticsService implements AnalyticsServiceInterface {
   void setCallback(AnalyticsCallback callback) {
     _analyticsCallback = callback;
     _logMessage('[FmhAnalyticsService] Analytics callback set');
+  }
+
+  /// Applies analytics privacy settings before any future event is emitted.
+  void configure(
+    NotificationAnalyticsOptions options, {
+    bool enableDebugLogging = false,
+  }) {
+    _options = options;
+    _debugLoggingEnabled = enableDebugLogging;
   }
 
   @override
@@ -52,16 +65,21 @@ class FmhAnalyticsService implements AnalyticsServiceInterface {
     try {
       final Map<String, dynamic> properties = {
         'message_id': message.messageId,
-        'title': message.notification?.title,
-        'body': message.notification?.body,
-        'data': message.data,
         'sent_time': message.sentTime?.toIso8601String(),
+        'has_notification': message.notification != null,
+        'data_key_count': message.data.length,
+        if (_options.privacy == NotificationAnalyticsPrivacy.fullPayload) ...{
+          'title': message.notification?.title,
+          'body': message.notification?.body,
+          'data': message.data,
+        },
       };
 
       await trackEvent('notification_received', properties);
     } catch (error, stack) {
       _logMessage(
-          '[FmhAnalyticsService] Track notification received error: $error');
+        '[FmhAnalyticsService] Track notification received error: $error',
+      );
       _logMessage('[FmhAnalyticsService] Stack trace: $stack');
     }
   }
@@ -71,17 +89,20 @@ class FmhAnalyticsService implements AnalyticsServiceInterface {
     try {
       final Map<String, dynamic> properties = {
         'message_id': message.messageId,
-        'title': message.notification?.title,
-        'body': message.notification?.body,
-        'data': message.data,
         'sent_time': message.sentTime?.toIso8601String(),
         'action': 'click',
+        if (_options.privacy == NotificationAnalyticsPrivacy.fullPayload) ...{
+          'title': message.notification?.title,
+          'body': message.notification?.body,
+          'data': message.data,
+        },
       };
 
       await trackEvent('notification_clicked', properties);
     } catch (error, stack) {
       _logMessage(
-          '[FmhAnalyticsService] Track notification clicked error: $error');
+        '[FmhAnalyticsService] Track notification clicked error: $error',
+      );
       _logMessage('[FmhAnalyticsService] Stack trace: $stack');
     }
   }
@@ -94,7 +115,8 @@ class FmhAnalyticsService implements AnalyticsServiceInterface {
   Future<void> trackTokenEvent(String eventType, String? token) async {
     try {
       final Map<String, dynamic> properties = {
-        'token': token, // Be careful with PII
+        'token_present': token != null,
+        'token_length': token?.length,
         'event_type': eventType,
         'timestamp': DateTime.now().toIso8601String(),
       };
@@ -107,7 +129,7 @@ class FmhAnalyticsService implements AnalyticsServiceInterface {
   }
 
   void _logMessage(String message) {
-    if (kDebugMode) {
+    if (kDebugMode && _debugLoggingEnabled) {
       print(message);
     }
   }
