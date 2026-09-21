@@ -1,105 +1,57 @@
-# firebase_messaging_handler
+# Firebase Messaging Handler
+
+**Push notifications are only half the job.**
 
 [![pub package](https://img.shields.io/pub/v/firebase_messaging_handler.svg)](https://pub.dev/packages/firebase_messaging_handler)
-[![package score](https://img.shields.io/pub/points/firebase_messaging_handler)](https://pub.dev/packages/firebase_messaging_handler/score)
+[![pub points](https://img.shields.io/pub/points/firebase_messaging_handler)](https://pub.dev/packages/firebase_messaging_handler/score)
 [![license](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 
-A practical notification layer for Flutter apps that use Firebase Cloud
-Messaging.
+You still need to open the right screen, handle messages while the app is
+open, keep a history, and let people turn promotions off without losing order
+updates.
 
-It brings remote messages, local notifications, actions, scheduling, in-app
-messages, an inbox, user preferences, delivery policy, and diagnostics behind
-one API. The package is designed for apps that need more than “show a push,”
-while still leaving native notification details available when you need them.
+`firebase_messaging_handler` brings that app-side work together for Flutter:
+FCM handling, local notifications, actions, scheduling, in-app messages, an
+inbox, user preferences, delivery policy, and diagnostics.
 
-Version 2.0.0 introduces a typed notification envelope, a shared delivery
-policy, runtime capability reporting, a preference center, typed delivery
-events, and a reference server implementation.
+Version 2.0 adds a typed notification envelope, one policy across
+package-managed delivery surfaces, runtime capability reporting, a preference
+center, typed delivery events, and a tested reference server.
 
-## What this package covers
+The package builds on
+[`firebase_messaging`](https://pub.dev/packages/firebase_messaging) and
+[`flutter_local_notifications`](https://pub.dev/packages/flutter_local_notifications).
+You keep your own navigation, backend, analytics, and product rules. This
+package connects the notification pieces around them.
 
-| Need | Package support |
+[Get started](#get-started) · [Feature examples](#local-notifications) ·
+[Backend payloads](#payloads-and-server-sending) ·
+[Platform support](#platform-support) · [Documentation](doc/index.md)
+
+## What it takes off your hands
+
+| In your app | In this package |
 | --- | --- |
-| Receive FCM messages | Foreground, background, and notification-open paths |
-| Show notifications | Remote, local, data-only bridge, grouped, and threaded |
-| Interact without opening a screen | Action buttons and inline reply where the OS supports them |
-| Deliver later | One-time and recurring local schedules |
-| Control delivery | Categories, quiet hours, frequency limits, and daily caps |
-| Keep a history | Persistent notification inbox with a ready-made Flutter view |
-| Message inside the app | Built-in in-app layouts plus custom templates |
-| Observe what happened | Typed delivery events and analytics callbacks |
-| Diagnose setup | Permission, token, platform, and capability checks |
-| Send safely from a backend | Versioned schema and a tested TypeScript reference server |
+| A notification should open the right screen, even after a cold start. | A shared notification-open stream with a separate initial-notification option. |
+| A message needs more than a title and body. | Local presentation, action buttons, inline reply, custom sounds, groups, threads, and native detail overrides where supported. |
+| A reminder belongs on the device, not in a server cron job. | One-time and recurring local schedules, cancellation, inspection, and timezone helpers. |
+| Users need to find an update after dismissing it. | A persistent local inbox with a ready-made Flutter view and replaceable storage. |
+| Some messages belong inside the app. | Built-in in-app layouts and custom templates triggered by data payloads. |
+| Users want messages, but not every message. | Categories, a preference-center widget, quiet hours, intervals, and daily caps for package-managed delivery. |
+| Your backend and clients need one payload contract. | A versioned envelope, JSON Schema, Dart encoder, web worker, and TypeScript reference server. |
+| Something did not appear, and you need to know why. | Setup diagnostics, runtime capabilities, typed delivery events, and privacy-aware analytics callbacks. |
 
 The package cannot override operating-system rules. Permission state, Android
 channels, Apple Focus modes, browser service workers, battery policy, and
 Firebase/APNs configuration still determine what a device can receive and
 display.
 
-## Contents
+Start with message handling and notification opens. Add the other pieces when
+your app needs them.
 
-- [Choose the delivery path first](#choose-the-delivery-path-first)
-- [Install](#install)
-- [Platform setup](#platform-setup)
-- [Initialize the handler](#initialize-the-handler)
-- [Handle notification opens](#handle-notification-opens)
-- [Tokens and topics](#tokens-and-topics)
-- [Local notifications](#local-notifications)
-- [Actions and inline reply](#actions-and-inline-reply)
-- [Scheduling](#scheduling)
-- [Groups, threads, badges, and sounds](#groups-threads-badges-and-sounds)
-- [Foreground presentation](#foreground-presentation)
-- [In-app messages](#in-app-messages)
-- [Preferences and delivery policy](#preferences-and-delivery-policy)
-- [Inbox](#inbox)
-- [Delivery events and analytics](#delivery-events-and-analytics)
-- [Payloads and server sending](#payloads-and-server-sending)
-- [Diagnostics and capabilities](#diagnostics-and-capabilities)
-- [Testing](#testing)
-- [Platform support](#platform-support)
-- [Troubleshooting](#troubleshooting)
-- [Further documentation](#further-documentation)
+## Get started
 
-## Choose the delivery path first
-
-The most important decision is who presents a remote notification.
-
-### System-presented remote notifications
-
-Send an FCM `notification` payload when the alert must be presented as
-reliably as the operating system allows while the app is backgrounded or
-terminated. FCM/APNs owns presentation in those states.
-
-This is the usual choice for chat messages, account alerts, and other
-user-visible transactional notifications.
-
-There is a tradeoff: client-side preferences and quiet hours cannot stop an
-alert that the operating system has already displayed.
-
-### Client-presented remote notifications
-
-Send a data-only message when the app must evaluate package-managed categories,
-quiet hours, caps, deduplication, or custom presentation before showing
-anything. The package can turn a valid data message into a local notification.
-
-Data-only delivery is best-effort when the app is not active. Android power
-management, Apple background execution limits, force-stop state, and message
-priority can delay or prevent it.
-
-### Local and in-app notifications
-
-Use local notifications for reminders produced on the device. Use in-app
-messages for content that should appear only while the user is in the app.
-Both paths participate in package-managed preferences and delivery policy.
-
-For mixed products, it is normal to use all three approaches:
-
-- system-presented remote notifications for time-sensitive alerts;
-- data-only messages for policy-controlled campaigns;
-- local schedules for device-owned reminders;
-- in-app messages for contextual education and promotion.
-
-## Install
+### Install
 
 Add the package:
 
@@ -125,9 +77,9 @@ You still need to configure Firebase in the host application. This package
 does not replace `firebase_core` setup or the platform configuration files
 created by FlutterFire.
 
-## Platform setup
+### Configure the platforms you ship
 
-### Firebase
+#### Firebase
 
 The shortest route is the FlutterFire CLI:
 
@@ -150,7 +102,7 @@ await Firebase.initializeApp(
 Keep Firebase service-account credentials on a trusted server. Never include a
 service-account JSON file in a Flutter app.
 
-### Android
+#### Android
 
 Place `google-services.json` in `android/app/` and apply the Google Services
 Gradle plugin as required by FlutterFire.
@@ -203,7 +155,7 @@ if (capabilities.supports(NotificationCapability.exactScheduling)) {
 See [Android setup](doc/getting-started/android-setup.md) for the complete host
 configuration.
 
-### iOS
+#### iOS
 
 Add `GoogleService-Info.plist` to the Runner target, then enable:
 
@@ -226,7 +178,7 @@ exist before a notification arrives.
 
 See [iOS setup](doc/getting-started/ios-setup.md).
 
-### macOS
+#### macOS
 
 Add the Firebase macOS configuration to the host target and enable the
 appropriate signing, notification, and background capabilities. Local
@@ -236,7 +188,7 @@ and should be verified on the target you ship.
 
 See [macOS setup](doc/getting-started/macos-setup.md).
 
-### Web
+#### Web
 
 Configure Firebase for the Flutter web app, then copy
 [web/firebase-messaging-sw.template.js](web/firebase-messaging-sw.template.js)
@@ -256,7 +208,7 @@ scheduling and inline notification reply are not portable browser features.
 
 See [web setup](doc/getting-started/web-setup.md).
 
-### Windows and Linux
+#### Windows and Linux
 
 Windows and Linux operate in desktop local mode. You can use local
 presentation, inbox, preferences, delivery policy, in-app templates, and the
@@ -269,10 +221,12 @@ required by `flutter_local_notifications`.
 
 See [desktop setup](doc/getting-started/desktop-setup.md).
 
-## Initialize the handler
+### Initialize once and listen for opens
 
-Use one shared handler instance. Initialization returns a broadcast stream of
-notification-open data:
+This bootstrap is for an Android or iOS app with Firebase configured.
+`firebase_options.dart` is generated by FlutterFire, and `MyApp` is your
+existing root widget. Use one shared handler instance; initialization returns
+a broadcast stream of notification-open data.
 
 ```dart
 import 'dart:async';
@@ -283,19 +237,22 @@ import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
 
-final navigatorKey = GlobalKey<NavigatorState>();
+final notifications = FirebaseMessagingHandler.instance;
 StreamSubscription<NotificationData?>? notificationOpenSubscription;
 
-Future<void> configureNotifications() async {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  final handler = FirebaseMessagingHandler.instance;
+  await notifications.configureBackgroundMessageHandler(
+    firebaseMessagingHandlerBackgroundDispatcher,
+  );
 
-  final openStream = await handler.initialize(
+  final openStream = await notifications.initialize(
     FCMConfiguration(
-      webVapidKey: const String.fromEnvironment('WEB_VAPID_KEY'),
       androidNotificationIconPath: '@drawable/ic_notification',
       defaultChannelId: 'general',
       androidChannels: [
@@ -307,40 +264,16 @@ Future<void> configureNotifications() async {
           priority: NotificationPriorityEnum.high,
         ),
       ],
-      notificationCategories: const [
-        NotificationCategory(
-          id: 'messages',
-          name: 'Messages',
-          description: 'New messages and replies',
-        ),
-        NotificationCategory(
-          id: 'product_updates',
-          name: 'Product updates',
-          defaultEnabled: true,
-        ),
-      ],
-      deliveryPolicy: const NotificationDeliveryPolicy(
-        quietHours: NotificationQuietHours(
-          startHour: 22,
-          endHour: 7,
-        ),
-        perCategoryInterval: Duration(minutes: 2),
-        globalDailyCap: 20,
-      ),
       updateTokenCallback: uploadTokenToYourBackend,
-      enableDefaultDataOnlyBridge: true,
-      dataOnlyBridgeChannelId: 'general',
-      enableDebugLogging: false,
     ),
   );
 
-  handler.setInAppNavigatorKey(navigatorKey);
-
-  notificationOpenSubscription = openStream?.listen((data) {
-    if (data != null) {
-      routeFromNotification(data);
-    }
+  notificationOpenSubscription = openStream?.listen((notification) {
+    if (notification == null) return;
+    routeFromNotification(notification);
   });
+
+  runApp(const MyApp());
 }
 
 Future<bool> uploadTokenToYourBackend(String token) async {
@@ -349,12 +282,22 @@ Future<bool> uploadTokenToYourBackend(String token) async {
 }
 
 void routeFromNotification(NotificationData data) {
+  // Connect this to your app's routing layer.
   final route = data.payload['route'] as String?;
-  if (route != null) {
-    navigatorKey.currentState?.pushNamed(route, arguments: data.payload);
-  }
+  debugPrint('Open route: $route');
 }
 ```
+
+Wait until authentication and your router are ready before navigating. Treat
+payload routes as untrusted input and allow only destinations your app knows
+how to open.
+
+For web, also pass the public VAPID key through
+`FCMConfiguration.webVapidKey`. Add notification categories, delivery policy,
+Apple action categories, Windows identity, and the data-only bridge only when
+the app uses those features; each is covered below.
+
+#### Ask permission at the right moment
 
 `FCMConfiguration` deliberately does not request permission or synchronize a
 token by default. This lets the app choose the right moment for its permission
@@ -387,9 +330,16 @@ await notificationOpenSubscription?.cancel();
 await FirebaseMessagingHandler.instance.dispose();
 ```
 
-### Background processing
+Keep the stream subscription with its app-level owner. Dispose the shared
+handler when that owner is finished with it, not when an individual screen
+closes.
 
-Register a top-level background entry point before `runApp`:
+#### Background processing
+
+The quick start registers the package dispatcher, which is enough when you
+only need the built-in pipeline. For app-specific work, register your own
+top-level entry point before `runApp`. Add `firebase_messaging` as a direct
+dependency when the host app imports `RemoteMessage`:
 
 ```dart
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -451,6 +401,49 @@ await FirebaseMessagingHandler.instance
 
 Keep background handlers short. The operating system owns their execution
 window.
+
+## Choose who displays remote notifications
+
+This choice matters more than any configuration flag.
+
+| Delivery path | Who displays it? | What to account for |
+| --- | --- | --- |
+| FCM `notification` payload | FCM/APNs and the operating system handle background and terminated presentation. The app handles foreground presentation. | Client-side quiet hours cannot stop an alert the OS has already shown. Enforce those preferences on your server when needed. |
+| Data-only FCM payload | The package can evaluate the message, then create a local notification. | This allows pre-display client policy, but background delivery and execution are best-effort. |
+| Local or in-app notification | Your app requests package-managed presentation or scheduling. | Permission, runtime capability, delivery policy, and scheduling restrictions still apply. |
+
+Use system presentation for alerts that should not depend on Dart running
+before display. This is the usual choice for chat messages, account alerts,
+and other time-sensitive transactional notifications.
+
+Use client presentation when the app must evaluate categories, quiet hours,
+frequency caps, expiry, deduplication, or custom presentation before showing
+anything. Data-only delivery can still be delayed or prevented by Android
+power management, Apple background execution limits, force-stop state, and
+message priority.
+
+Use local notifications for reminders produced on the device. Use in-app
+messages for content that should appear only while the user is in the app.
+
+For mixed products, it is normal to use all four paths:
+
+- system-presented remote notifications for time-sensitive alerts;
+- data-only messages for policy-controlled campaigns;
+- local schedules for device-owned reminders;
+- in-app messages for contextual education and promotion.
+
+The built-in bridge can promote a valid data-only display payload to a local
+notification:
+
+```dart
+FirebaseMessagingHandler.instance.enableDefaultDataOnlyBridge(
+  channelId: 'general',
+);
+```
+
+You can also enable it in `FCMConfiguration`. It is off by default and does
+not turn every silent business event into an alert. The payload still needs
+valid display content, and background delivery remains subject to the OS.
 
 ## Handle notification opens
 
@@ -663,7 +656,9 @@ final scheduled = await FirebaseMessagingHandler.instance.scheduleNotification(
 ```
 
 Inexact delivery is the safest default for general reminders. Ask for exact
-alarm access only when the product requirement justifies it:
+alarm access only when the product requirement justifies it. Exact mode asks
+the platform for exact timing; it is not a guarantee against every device or
+OS restriction:
 
 ```dart
 final allowed = await FirebaseMessagingHandler.instance
@@ -840,6 +835,9 @@ An in-app message is carried in an FCM data value named `fcmh_inapp` (the
 legacy `in_app_payload` name is also accepted). The value must be a JSON
 string, because FCM HTTP v1 data values are strings.
 
+This is the package's own in-app presentation system, not the separate
+Firebase In-App Messaging product.
+
 Start by giving the presenter a navigator key and registering a template:
 
 ```dart
@@ -933,6 +931,10 @@ are not registered by this app version.
 Categories give users understandable controls instead of one all-or-nothing
 switch. Define them in `FCMConfiguration.notificationCategories`, then embed
 the ready-made preference screen:
+
+A preference category ID is an app-level user choice. It is not an Android
+channel ID or an Apple action-category ID, even when your product chooses to
+use similar names for them.
 
 ```dart
 class NotificationSettingsScreen extends StatelessWidget {
@@ -1042,6 +1044,9 @@ class InboxScreen extends StatelessWidget {
 `NotificationInboxView` includes paging, pull-to-refresh, mark-as-read, action
 chips, optional swipe-to-delete, and theming hooks. For a database or synced
 inbox, implement `NotificationInboxStorageInterface`.
+
+The default inbox is a local history of notifications the package processed,
+not a server-synchronized record of every push your backend attempted to send.
 
 The built-in storage API can also be used directly:
 
@@ -1542,16 +1547,19 @@ leave verbose payload logging enabled in production.
 
 ## Further documentation
 
-- [Documentation index](doc/index.md)
-- [Migrating to 2.0.0](doc/v2-migration.md)
-- [Notification envelope v2](doc/features/envelope-v2.md)
-- [Server recipes](doc/features/server-recipes.md)
-- [Android setup](doc/getting-started/android-setup.md)
-- [iOS setup](doc/getting-started/ios-setup.md)
-- [Web setup](doc/getting-started/web-setup.md)
-- [Desktop setup](doc/getting-started/desktop-setup.md)
-- [Example application](example/README.md)
-- [Changelog](CHANGELOG.md)
+| Looking for | Start here |
+| --- | --- |
+| Setup and feature guides | [Documentation index](doc/index.md) |
+| Upgrading an existing integration | [2.0 migration](doc/v2-migration.md) and [changelog](CHANGELOG.md) |
+| Payloads and backend integration | [Envelope v2](doc/features/envelope-v2.md), [server recipes](doc/features/server-recipes.md), and [reference server](server/README.md) |
+| Platform setup | [Android](doc/getting-started/android-setup.md), [iOS](doc/getting-started/ios-setup.md), [web](doc/getting-started/web-setup.md), and [desktop](doc/getting-started/desktop-setup.md) |
+| Platform-specific limits | [Capability matrix](doc/platform-capabilities.md) |
+| A runnable integration | [Example application](example/README.md) |
+| Contributing or reporting a vulnerability | [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md) |
+
+For a bug report, include the package version, platform and OS version, app
+state, a sanitized payload, and diagnostic output. Leave out service-account
+keys, full device tokens, and private notification content.
 
 ## Contributing
 
